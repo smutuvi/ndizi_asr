@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gemini-asr-bench"
+version = "0.1.0"
+description = "Benchmark Gemini ASR models via OpenRouter on Hugging Face speech datasets"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Ndizi MLOps" }]
+dependencies = [
+  "datasets>=2.19.0",
+  "soundfile>=0.12.1",
+  "numpy>=1.24.0",
+  "requests>=2.31.0",
+  "python-dotenv>=1.0.0",
+  "PyYAML>=6.0.1",
+  "jiwer>=3.0.0",
+  "tqdm>=4.66.0",
+  "pandas>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+gemini-asr-bench = "gemini_asr_bench.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+gemini_asr_bench = ["py.typed"]

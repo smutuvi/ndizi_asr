@@ -1,0 +1,38 @@
+# Environment / secrets
+.env
+.env.local
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.envrc
+
+# Caches / data
+.cache/
+.hf_cache/
+data/
+*.wav
+*.mp3
+*.flac
+
+# Results (keep structure, ignore large outputs)
+results/**
+!results/.gitkeep
+!results/summaries/.gitkeep
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Jupyter
+.ipynb_checkpoints/

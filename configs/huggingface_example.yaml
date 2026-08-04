@@ -1,0 +1,41 @@
+# Example: evaluate any Hugging Face ASR dataset via a generic loader.
+experiment_name: custom_hf_gemini
+
+models:
+  - google/gemini-2.5-flash
+
+dataset:
+  type: huggingface
+  dataset_id: mozilla-foundation/common_voice_17_0
+  # config / subset name on HF (required for Common Voice)
+  config_name: sw
+  split: test
+  audio_column: audio
+  text_column: sentence
+  max_samples: 50
+  streaming: false
+  # Optional Hugging Face revision / trust_remote_code
+  # revision: main
+  # trust_remote_code: false
+
+openrouter:
+  base_url: https://openrouter.ai/api/v1
+  timeout_seconds: 120
+  max_retries: 5
+  retry_backoff_seconds: 2.0
+  temperature: 0.0
+  max_tokens: 1024
+
+prompt: >
+  Transcribe the speech in this audio exactly.
+  Return only the transcript text with no commentary or labels.
+
+normalization:
+  lowercase: true
+  strip_punctuation: true
+  collapse_whitespace: true
+
+concurrency: 2
+output_dir: results
+resume: true
+save_every: 10
