@@ -41,7 +41,7 @@ def _gated_access_error(model_id: str, exc: Exception) -> OSError:
         f"1) Open https://huggingface.co/{model_id} while logged in and accept access.\n"
         f"2) {auth_hint}\n"
         f"Original error: {exc}"
-    ) from exc
+    )
 
 
 def _resample_linear(array: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
