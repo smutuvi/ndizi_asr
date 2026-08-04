@@ -40,11 +40,21 @@ class DatasetConfig:
 
 
 @dataclass
+class LocalWhisperConfig:
+    device: Optional[str] = None  # cuda | mps | cpu | null=auto
+    torch_dtype: Optional[str] = "auto"  # auto | float16 | bfloat16 | float32
+    num_beams: int = 1
+    # Local GPU models are typically safer sequential; override if needed.
+    concurrency: int = 1
+
+
+@dataclass
 class RunConfig:
     experiment_name: str = "gemini_asr_bench"
     models: list[str] = field(default_factory=list)
     dataset: DatasetConfig = field(default_factory=DatasetConfig)
     openrouter: OpenRouterConfig = field(default_factory=OpenRouterConfig)
+    local_whisper: LocalWhisperConfig = field(default_factory=LocalWhisperConfig)
     prompt: str = (
         "Transcribe the speech in this audio exactly. "
         "Return only the transcript text with no commentary or labels."
@@ -64,6 +74,7 @@ def load_run_config(raw: dict[str, Any]) -> RunConfig:
     ds_raw = _as_dict(raw.get("dataset"))
     or_raw = _as_dict(raw.get("openrouter"))
     norm_raw = _as_dict(raw.get("normalization"))
+    local_raw = _as_dict(raw.get("local_whisper"))
 
     languages = ds_raw.get("languages") or {}
     if not isinstance(languages, dict):
@@ -94,6 +105,12 @@ def load_run_config(raw: dict[str, Any]) -> RunConfig:
             retry_backoff_seconds=float(or_raw.get("retry_backoff_seconds", 2.0)),
             temperature=float(or_raw.get("temperature", 0.0)),
             max_tokens=int(or_raw.get("max_tokens", 1024)),
+        ),
+        local_whisper=LocalWhisperConfig(
+            device=local_raw.get("device"),
+            torch_dtype=local_raw.get("torch_dtype", "auto"),
+            num_beams=int(local_raw.get("num_beams", 1)),
+            concurrency=max(1, int(local_raw.get("concurrency", 1))),
         ),
         prompt=str(raw.get("prompt") or RunConfig.prompt).strip(),
         normalization=NormalizationConfig(

@@ -10,6 +10,7 @@ from typing import Any, Optional
 import yaml
 from dotenv import load_dotenv
 
+from .backends.resolve import needs_openrouter
 from .config import load_run_config
 from .evaluate import BenchmarkRunner
 
@@ -27,7 +28,10 @@ def _parse_kv_pairs(items: list[str]) -> dict[str, str]:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="gemini-asr-bench",
-        description="Benchmark Gemini ASR models via OpenRouter on Hugging Face datasets.",
+        description=(
+            "Benchmark ASR models on Hugging Face datasets via OpenRouter "
+            "or local Whisper checkpoints (e.g. Sunbird)."
+        ),
     )
     p.add_argument(
         "--config",
@@ -40,7 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         dest="models",
         default=None,
-        help="OpenRouter model id (repeatable). Overrides config models.",
+        help=(
+            "Model id (repeatable). OpenRouter ids like google/gemini-2.5-flash, "
+            "or local HF Whisper ids like Sunbird/asr-whisper-51-african-languages "
+            "(prefix with hf: if needed)."
+        ),
     )
     p.add_argument(
         "--dataset-id",
@@ -72,6 +80,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--streaming", action="store_true", default=None)
     p.add_argument("--no-streaming", action="store_true", default=False)
     p.add_argument("--concurrency", type=int, default=None)
+    p.add_argument("--device", default=None, help="Local Whisper device: cuda|mps|cpu")
+    p.add_argument(
+        "--torch-dtype",
+        default=None,
+        help="Local Whisper dtype: auto|float16|bfloat16|float32",
+    )
     p.add_argument("--output-dir", default=None)
     p.add_argument("--experiment-name", default=None)
     p.add_argument("--prompt", default=None)
@@ -85,6 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
 def apply_overrides(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     raw = dict(raw)
     ds = dict(raw.get("dataset") or {})
+    local = dict(raw.get("local_whisper") or {})
 
     if args.experiment_name:
         raw["experiment_name"] = args.experiment_name
@@ -123,7 +138,13 @@ def apply_overrides(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, 
     if args.languages:
         ds["languages"] = _parse_kv_pairs(args.languages)
 
+    if args.device:
+        local["device"] = args.device
+    if args.torch_dtype:
+        local["torch_dtype"] = args.torch_dtype
+
     raw["dataset"] = ds
+    raw["local_whisper"] = local
     return raw
 
 
@@ -141,13 +162,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     else:
         load_dotenv()
 
-    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if not api_key:
-        logging.error(
-            "OPENROUTER_API_KEY not set. Copy .env.example to .env and add your key."
-        )
-        return 2
-
     if not args.config.exists():
         logging.error("Config not found: %s", args.config)
         return 2
@@ -158,10 +172,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     raw = apply_overrides(raw, args)
     config = load_run_config(raw)
 
-    # Allow OPENROUTER_BASE_URL override from env
     env_base = os.getenv("OPENROUTER_BASE_URL")
     if env_base:
         config.openrouter.base_url = env_base
+
+    api_key = os.getenv("OPENROUTER_API_KEY", "").strip() or None
+    if needs_openrouter(config.models) and not api_key:
+        logging.error(
+            "OPENROUTER_API_KEY not set, but OpenRouter models were requested. "
+            "Copy .env.example to .env and add your key, or pass only local models "
+            "like Sunbird/asr-whisper-51-african-languages."
+        )
+        return 2
 
     runner = BenchmarkRunner(config, api_key=api_key)
     summary = runner.run()

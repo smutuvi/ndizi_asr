@@ -11,6 +11,8 @@ from typing import Any, Optional
 
 from tqdm import tqdm
 
+from .backends.resolve import parse_model_spec
+from .backends.whisper_hf import HuggingFaceWhisperClient
 from .client import OpenRouterASRClient, audio_array_to_wav_base64
 from .config import RunConfig
 from .datasets import AudioSample, build_loader
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def _slug(text: str) -> str:
-    return text.replace("/", "_").replace(" ", "_")
+    return text.replace("/", "_").replace(" ", "_").replace(":", "_")
 
 
 def _utc_now() -> str:
@@ -28,11 +30,34 @@ def _utc_now() -> str:
 
 
 class BenchmarkRunner:
-    def __init__(self, config: RunConfig, api_key: str) -> None:
+    def __init__(self, config: RunConfig, api_key: Optional[str] = None) -> None:
         self.config = config
-        self.client = OpenRouterASRClient(api_key=api_key, config=config.openrouter)
+        self.api_key = api_key
+        self.openrouter_client: Optional[OpenRouterASRClient] = None
+        self._whisper_clients: dict[str, HuggingFaceWhisperClient] = {}
         self.output_root = Path(config.output_dir) / config.experiment_name
         self.output_root.mkdir(parents=True, exist_ok=True)
+
+    def _get_openrouter(self) -> OpenRouterASRClient:
+        if self.openrouter_client is None:
+            if not self.api_key:
+                raise ValueError("OPENROUTER_API_KEY is required for OpenRouter models")
+            self.openrouter_client = OpenRouterASRClient(
+                api_key=self.api_key,
+                config=self.config.openrouter,
+            )
+        return self.openrouter_client
+
+    def _get_whisper(self, model_id: str) -> HuggingFaceWhisperClient:
+        if model_id not in self._whisper_clients:
+            lw = self.config.local_whisper
+            self._whisper_clients[model_id] = HuggingFaceWhisperClient(
+                model_id,
+                device=lw.device,
+                torch_dtype=lw.torch_dtype,
+                num_beams=lw.num_beams,
+            )
+        return self._whisper_clients[model_id]
 
     def run(self, models: Optional[list[str]] = None) -> dict[str, Any]:
         models = models or self.config.models
@@ -63,7 +88,8 @@ class BenchmarkRunner:
         return summary
 
     def _run_model(self, model: str, samples: list[AudioSample]) -> dict[str, Any]:
-        model_dir = self.output_root / _slug(model)
+        spec = parse_model_spec(model)
+        model_dir = self.output_root / _slug(spec.raw)
         model_dir.mkdir(parents=True, exist_ok=True)
         predictions_path = model_dir / "predictions.jsonl"
         metrics_path = model_dir / "metrics.json"
@@ -82,7 +108,13 @@ class BenchmarkRunner:
             logger.info("Resuming %s with %d existing predictions", model, len(done_ids))
 
         pending = [s for s in samples if s.sample_id not in done_ids]
-        logger.info("Model %s: %d pending / %d total", model, len(pending), len(samples))
+        logger.info(
+            "Model %s [%s]: %d pending / %d total",
+            spec.model_id,
+            spec.backend,
+            len(pending),
+            len(samples),
+        )
 
         buffer: list[dict[str, Any]] = []
 
@@ -96,14 +128,25 @@ class BenchmarkRunner:
             buffer = []
 
         def process_one(sample: AudioSample) -> dict[str, Any]:
-            audio_b64, fmt = audio_array_to_wav_base64(sample.audio_array, sample.sampling_rate)
-            result = self.client.transcribe(
-                model=model,
-                audio_b64=audio_b64,
-                audio_format=fmt,
-                prompt=self.config.prompt,
-                language=sample.language,
-            )
+            if spec.backend == "hf_whisper":
+                client = self._get_whisper(spec.model_id)
+                result = client.transcribe_array(
+                    sample.audio_array,
+                    sample.sampling_rate,
+                    language=sample.language,
+                    language_config=sample.language_config,
+                )
+            else:
+                audio_b64, fmt = audio_array_to_wav_base64(
+                    sample.audio_array, sample.sampling_rate
+                )
+                result = self._get_openrouter().transcribe(
+                    model=spec.model_id,
+                    audio_b64=audio_b64,
+                    audio_format=fmt,
+                    prompt=self.config.prompt,
+                    language=sample.language,
+                )
             pred = result.text
             return {
                 "sample_id": sample.sample_id,
@@ -114,13 +157,19 @@ class BenchmarkRunner:
                 "reference_normalized": normalize_text(sample.reference, self.config.normalization),
                 "prediction_normalized": normalize_text(pred, self.config.normalization),
                 "latency_seconds": result.latency_seconds,
-                "model": model,
+                "model": spec.raw,
+                "backend": spec.backend,
                 "error": result.error,
             }
 
-        with ThreadPoolExecutor(max_workers=self.config.concurrency) as pool:
+        workers = (
+            self.config.local_whisper.concurrency
+            if spec.backend == "hf_whisper"
+            else self.config.concurrency
+        )
+        with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {pool.submit(process_one, s): s for s in pending}
-            for fut in tqdm(as_completed(futures), total=len(futures), desc=model):
+            for fut in tqdm(as_completed(futures), total=len(futures), desc=spec.raw):
                 row = fut.result()
                 rows.append(row)
                 buffer.append(row)
@@ -128,7 +177,6 @@ class BenchmarkRunner:
                     flush()
             flush()
 
-        # Per-language metrics
         by_lang: dict[str, list[dict[str, Any]]] = {}
         for row in rows:
             by_lang.setdefault(str(row.get("language") or "unknown"), []).append(row)
@@ -139,7 +187,9 @@ class BenchmarkRunner:
         }
         overall = summarize_predictions(rows, self.config.normalization)
         metrics = {
-            "model": model,
+            "model": spec.raw,
+            "backend": spec.backend,
+            "model_id": spec.model_id,
             "overall": overall,
             "per_language": per_language,
             "predictions_path": str(predictions_path),
@@ -162,6 +212,7 @@ class BenchmarkRunner:
             "prediction_normalized",
             "latency_seconds",
             "model",
+            "backend",
             "error",
         ]
         with path.open("w", encoding="utf-8", newline="") as f:

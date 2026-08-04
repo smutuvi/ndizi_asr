@@ -24,6 +24,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0"]
+local = [
+  "torch>=2.1.0",
+  "transformers>=4.40.0",
+  "accelerate>=0.27.0",
+]
 
 [project.scripts]
 gemini-asr-bench = "gemini_asr_bench.cli:main"

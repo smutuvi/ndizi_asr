@@ -4,25 +4,16 @@ import base64
 import io
 import logging
 import time
-from dataclasses import dataclass
 from typing import Any, Optional
 
 import numpy as np
 import requests
 import soundfile as sf
 
+from .backends.types import TranscriptionResult
 from .config import OpenRouterConfig
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class TranscriptionResult:
-    text: str
-    latency_seconds: float
-    model: str
-    raw_response: Optional[dict[str, Any]] = None
-    error: Optional[str] = None
 
 
 def audio_array_to_wav_base64(array: np.ndarray, sampling_rate: int) -> tuple[str, str]:
