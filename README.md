@@ -14,10 +14,8 @@ Default evaluation covers **FLEURS** for:
 Default models:
 
 - `google/gemini-2.5-flash`
-- `google/gemini-3-flash-preview`
 - `google/gemini-3.5-flash`
-
-> Your original request listed Gemini 3.5 Flash twice. The config includes the three distinct Flash slugs available on OpenRouter (`2.5`, `3`, and `3.5`). Override with `--model` as needed.
+- `google/gemini-3.6-flash`
 
 ## Setup
 
@@ -35,7 +33,7 @@ Optional: set `HF_TOKEN` in `.env` for gated Hugging Face datasets.
 
 ## Quick start (FLEURS)
 
-Smoke test (2 samples / language, one model):
+Smoke test (2 samples / language, Gemini 2.5 / 3.5 / 3.6 Flash):
 
 ```bash
 chmod +x scripts/*.sh
