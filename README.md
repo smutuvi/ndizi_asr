@@ -22,13 +22,14 @@ Default models:
 ## Setup
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+# In your conda/venv env (e.g. conda activate ndizi):
 pip install -e .
 
 cp .env.example .env
 # edit .env and set OPENROUTER_API_KEY=...
 ```
+
+If you skip `pip install -e .`, the `scripts/*.sh` helpers set `PYTHONPATH=src` so `python -m gemini_asr_bench.cli` still resolves — but you still need the Python deps from `requirements.txt` / `pip install -e .`.
 
 Optional: set `HF_TOKEN` in `.env` for gated Hugging Face datasets.
 

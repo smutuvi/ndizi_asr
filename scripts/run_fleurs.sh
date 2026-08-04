@@ -3,6 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 if [[ ! -f .env ]]; then
   echo "Missing .env — copy .env.example and set OPENROUTER_API_KEY" >&2
