@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Optional
 
@@ -14,6 +15,33 @@ logger = logging.getLogger(__name__)
 SAMPLE_RATE = 16000
 # Whisper encoder receptive field (~30s). Chunk longer audio with overlap-free joins.
 MAX_SECONDS = 30.0
+
+
+def _hf_token() -> Optional[str]:
+    for key in ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+        value = os.getenv(key, "").strip()
+        if value:
+            return value
+    return None
+
+
+def _gated_access_error(model_id: str, exc: Exception) -> OSError:
+    token = _hf_token()
+    auth_hint = (
+        "HF_TOKEN is set, but access was still denied — make sure this account "
+        f"accepted the model terms at https://huggingface.co/{model_id}."
+        if token
+        else (
+            "No HF_TOKEN found. Add a Hugging Face token to `.env` "
+            "(HF_TOKEN=hf_...) after accepting the model terms, or run `huggingface-cli login`."
+        )
+    )
+    return OSError(
+        f"Cannot download gated model {model_id!r}.\n"
+        f"1) Open https://huggingface.co/{model_id} while logged in and accept access.\n"
+        f"2) {auth_hint}\n"
+        f"Original error: {exc}"
+    ) from exc
 
 
 def _resample_linear(array: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
@@ -52,6 +80,7 @@ class HuggingFaceWhisperClient:
         device: Optional[str] = None,
         torch_dtype: Optional[str] = None,
         num_beams: int = 1,
+        token: Optional[str] = None,
     ) -> None:
         try:
             import torch
@@ -65,6 +94,7 @@ class HuggingFaceWhisperClient:
         self.model_id = model_id
         self.num_beams = num_beams
         self.torch = torch
+        hf_token = token if token is not None else _hf_token()
 
         if device:
             self.device = torch.device(device)
@@ -93,14 +123,29 @@ class HuggingFaceWhisperClient:
         if resolved_dtype is None:
             resolved_dtype = torch.float32
 
-        logger.info("Loading Whisper model %s on %s (%s)", model_id, self.device, resolved_dtype)
-        self.processor = WhisperProcessor.from_pretrained(model_id)
-        self.model = WhisperForConditionalGeneration.from_pretrained(
+        logger.info(
+            "Loading Whisper model %s on %s (%s); hf_token=%s",
             model_id,
-            torch_dtype=resolved_dtype,
-        ).to(self.device)
-        self.model.eval()
+            self.device,
+            resolved_dtype,
+            "set" if hf_token else "missing",
+        )
+        load_kwargs = {"token": hf_token} if hf_token else {}
+        try:
+            self.processor = WhisperProcessor.from_pretrained(model_id, **load_kwargs)
+            self.model = WhisperForConditionalGeneration.from_pretrained(
+                model_id,
+                torch_dtype=resolved_dtype,
+                **load_kwargs,
+            ).to(self.device)
+        except Exception as exc:  # noqa: BLE001
+            name = exc.__class__.__name__
+            msg = str(exc).lower()
+            if "gated" in msg or name in {"GatedRepoError", "RepositoryNotFoundError"} or "401" in msg:
+                raise _gated_access_error(model_id, exc) from exc
+            raise
 
+        self.model.eval()
         self._transcribe_tok = self.processor.tokenizer.convert_tokens_to_ids("<|transcribe|>")
         self._notimestamps_tok = self.processor.tokenizer.convert_tokens_to_ids("<|notimestamps|>")
 

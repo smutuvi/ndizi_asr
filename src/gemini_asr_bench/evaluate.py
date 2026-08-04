@@ -116,6 +116,10 @@ class BenchmarkRunner:
             len(samples),
         )
 
+        # Fail fast (and avoid concurrent model downloads) for local Whisper.
+        if spec.backend == "hf_whisper":
+            self._get_whisper(spec.model_id)
+
         buffer: list[dict[str, Any]] = []
 
         def flush() -> None:

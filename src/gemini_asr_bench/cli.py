@@ -10,9 +10,13 @@ from typing import Any, Optional
 import yaml
 from dotenv import load_dotenv
 
-from .backends.resolve import needs_openrouter
+from .backends.resolve import needs_openrouter, parse_model_spec
 from .config import load_run_config
 from .evaluate import BenchmarkRunner
+
+
+def _needs_hf_token(models: list[str]) -> bool:
+    return any(parse_model_spec(m).backend == "hf_whisper" for m in models)
 
 
 def _parse_kv_pairs(items: list[str]) -> dict[str, str]:
@@ -184,6 +188,18 @@ def main(argv: Optional[list[str]] = None) -> int:
             "like Sunbird/asr-whisper-51-african-languages."
         )
         return 2
+
+    hf_token = (
+        os.getenv("HF_TOKEN", "").strip()
+        or os.getenv("HUGGINGFACE_HUB_TOKEN", "").strip()
+        or os.getenv("HUGGING_FACE_HUB_TOKEN", "").strip()
+    )
+    if _needs_hf_token(config.models) and not hf_token:
+        logging.warning(
+            "Local Whisper/Sunbird models usually need HF auth for gated repos. "
+            "Accept terms at https://huggingface.co/Sunbird/asr-whisper-51-african-languages "
+            "and set HF_TOKEN in .env (or run: huggingface-cli login)."
+        )
 
     runner = BenchmarkRunner(config, api_key=api_key)
     summary = runner.run()
