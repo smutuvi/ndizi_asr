@@ -54,3 +54,29 @@ def test_resolve_sunbird_language_code():
     assert resolve_sunbird_language_code("oromo", "om_et") == "orm"
     assert resolve_sunbird_language_code("hausa", "ha_ng") == "hau"
     assert resolve_sunbird_language_code("Swahili", None) == "swa"
+
+
+def test_load_multi_source_config():
+    cfg = load_run_config(
+        {
+            "models": [
+                "google/gemini-2.5-flash",
+                "Sunbird/asr-whisper-51-african-languages",
+            ],
+            "dataset": {
+                "type": "huggingface",
+                "language": "swahili",
+                "audio_column": "audio",
+                "text_column": "text",
+                "sources": [
+                    "smutuvi/ndizi-1:test",
+                    {"dataset_id": "smutuvi/ndizi-1-2025", "split": "test"},
+                ],
+            },
+        }
+    )
+    assert len(cfg.dataset.sources) == 2
+    assert cfg.dataset.sources[0].dataset_id == "smutuvi/ndizi-1"
+    assert cfg.dataset.sources[0].split == "test"
+    assert cfg.dataset.sources[0].language == "swahili"
+    assert cfg.dataset.sources[1].dataset_id == "smutuvi/ndizi-1-2025"

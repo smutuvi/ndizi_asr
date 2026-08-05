@@ -5,7 +5,7 @@ from typing import Any, Iterator, Optional
 
 import numpy as np
 
-from ..config import DatasetConfig
+from ..config import DatasetConfig, DatasetSource
 
 
 @dataclass
@@ -17,6 +17,7 @@ class AudioSample:
     audio_array: np.ndarray
     sampling_rate: int
     meta: dict[str, Any]
+    dataset_id: str = ""
 
 
 AUDIO_COLUMN_CANDIDATES = ["audio", "audio_path", "path", "file", "wav", "speech"]
@@ -96,11 +97,14 @@ def _load_hf_split(
     else:
         ds = load_dataset(dataset_id, **kwargs)
 
-    # Decode audio arrays when present
     cols = list(ds.column_names) if hasattr(ds, "column_names") else []
     if "audio" in cols:
         ds = ds.cast_column("audio", Audio(sampling_rate=16000))
     return ds
+
+
+def _slug_dataset_id(dataset_id: str) -> str:
+    return dataset_id.replace("/", "_")
 
 
 class HuggingFaceDatasetLoader(BaseDatasetLoader):
@@ -112,18 +116,27 @@ class HuggingFaceDatasetLoader(BaseDatasetLoader):
         *,
         language_name: str = "default",
         language_config: Optional[str] = None,
+        dataset_id_override: Optional[str] = None,
     ) -> None:
         self.cfg = cfg
         self.language_name = language_name
         self.language_config = language_config or cfg.config_name or "default"
+        self.dataset_id = dataset_id_override or cfg.dataset_id
 
     def iter_samples(self) -> Iterator[AudioSample]:
         config_name = self.cfg.config_name
-        if not config_name and self.language_config and self.language_config != "default":
-            config_name = self.language_config
+        if not config_name and self.language_config and self.language_config not in {
+            "default",
+            self.dataset_id,
+            _slug_dataset_id(self.dataset_id),
+        }:
+            # Only treat language_config as HF config when it looks like a subset name
+            # (e.g. fleurs sw_ke), not a dataset slug used for labeling.
+            if "/" not in str(self.language_config):
+                config_name = self.language_config
 
         ds = _load_hf_split(
-            self.cfg.dataset_id,
+            self.dataset_id,
             config_name=config_name,
             split=self.cfg.split,
             streaming=self.cfg.streaming,
@@ -141,6 +154,7 @@ class HuggingFaceDatasetLoader(BaseDatasetLoader):
         except ValueError:
             id_col = None
 
+        ds_slug = _slug_dataset_id(self.dataset_id)
         count = 0
         for idx, row in enumerate(ds):
             if self.cfg.max_samples is not None and count >= self.cfg.max_samples:
@@ -153,11 +167,12 @@ class HuggingFaceDatasetLoader(BaseDatasetLoader):
                 continue
 
             audio_array, sr = extract_audio(row[audio_col])
-            sample_id = (
+            raw_id = (
                 str(row[id_col])
                 if id_col and row.get(id_col) is not None
                 else f"{self.language_config}_{idx}"
             )
+            sample_id = f"{ds_slug}:{raw_id}:{idx}"
             yield AudioSample(
                 sample_id=sample_id,
                 language=self.language_name,
@@ -166,6 +181,7 @@ class HuggingFaceDatasetLoader(BaseDatasetLoader):
                 audio_array=audio_array,
                 sampling_rate=sr,
                 meta={k: v for k, v in row.items() if k not in {audio_col}},
+                dataset_id=self.dataset_id,
             )
             count += 1
 
@@ -216,18 +232,48 @@ class FleursDatasetLoader(BaseDatasetLoader):
             yield from loader.iter_samples()
 
 
-def build_loader(cfg: DatasetConfig) -> BaseDatasetLoader:
-    dtype = (cfg.type or "fleurs").lower()
-    if dtype in {"fleurs", "google/fleurs"}:
-        return FleursDatasetLoader(cfg)
-    if dtype in {"huggingface", "hf", "datasets"}:
-        # Single config HF dataset (optionally multi-lang via languages map)
-        if cfg.languages:
-            return _MultiConfigHFLoader(cfg)
-        return HuggingFaceDatasetLoader(cfg)
-    raise ValueError(
-        f"Unknown dataset.type={cfg.type!r}. Use 'fleurs' or 'huggingface'."
-    )
+class MultiSourceHFLoader(BaseDatasetLoader):
+    """Load and concatenate multiple HF dataset sources in one eval run."""
+
+    def __init__(self, cfg: DatasetConfig) -> None:
+        if not cfg.sources:
+            raise ValueError("MultiSourceHFLoader requires dataset.sources")
+        self.cfg = cfg
+
+    def iter_samples(self) -> Iterator[AudioSample]:
+        for source in self.cfg.sources:
+            yield from self._iter_source(source)
+
+    def _iter_source(self, source: DatasetSource) -> Iterator[AudioSample]:
+        loader = HuggingFaceDatasetLoader(
+            DatasetConfig(
+                type="huggingface",
+                dataset_id=source.dataset_id,
+                config_name=source.config_name,
+                split=source.split,
+                language=source.language,
+                audio_column=source.audio_column or self.cfg.audio_column or "audio",
+                text_column=source.text_column or self.cfg.text_column or "text",
+                id_column=source.id_column if source.id_column is not None else self.cfg.id_column,
+                max_samples=(
+                    source.max_samples
+                    if source.max_samples is not None
+                    else self.cfg.max_samples
+                ),
+                streaming=self.cfg.streaming,
+                revision=source.revision if source.revision is not None else self.cfg.revision,
+                trust_remote_code=(
+                    bool(source.trust_remote_code)
+                    if source.trust_remote_code is not None
+                    else self.cfg.trust_remote_code
+                ),
+                load_kwargs=source.load_kwargs or self.cfg.load_kwargs,
+            ),
+            language_name=source.language,
+            language_config=_slug_dataset_id(source.dataset_id),
+            dataset_id_override=source.dataset_id,
+        )
+        yield from loader.iter_samples()
 
 
 class _MultiConfigHFLoader(BaseDatasetLoader):
@@ -255,3 +301,22 @@ class _MultiConfigHFLoader(BaseDatasetLoader):
                 language_config=config_name,
             )
             yield from loader.iter_samples()
+
+
+def build_loader(cfg: DatasetConfig) -> BaseDatasetLoader:
+    dtype = (cfg.type or "fleurs").lower()
+    if cfg.sources:
+        return MultiSourceHFLoader(cfg)
+    if dtype in {"fleurs", "google/fleurs"}:
+        return FleursDatasetLoader(cfg)
+    if dtype in {"huggingface", "hf", "datasets"}:
+        if cfg.languages:
+            return _MultiConfigHFLoader(cfg)
+        return HuggingFaceDatasetLoader(
+            cfg,
+            language_name=cfg.language or "default",
+            language_config=cfg.config_name or "default",
+        )
+    raise ValueError(
+        f"Unknown dataset.type={cfg.type!r}. Use 'fleurs' or 'huggingface'."
+    )

@@ -154,6 +154,7 @@ class BenchmarkRunner:
             pred = result.text
             return {
                 "sample_id": sample.sample_id,
+                "dataset_id": sample.dataset_id,
                 "language": sample.language,
                 "language_config": sample.language_config,
                 "reference": sample.reference,
@@ -182,12 +183,18 @@ class BenchmarkRunner:
             flush()
 
         by_lang: dict[str, list[dict[str, Any]]] = {}
+        by_dataset: dict[str, list[dict[str, Any]]] = {}
         for row in rows:
             by_lang.setdefault(str(row.get("language") or "unknown"), []).append(row)
+            by_dataset.setdefault(str(row.get("dataset_id") or "unknown"), []).append(row)
 
         per_language = {
             lang: summarize_predictions(lang_rows, self.config.normalization)
             for lang, lang_rows in sorted(by_lang.items())
+        }
+        per_dataset = {
+            ds_id: summarize_predictions(ds_rows, self.config.normalization)
+            for ds_id, ds_rows in sorted(by_dataset.items())
         }
         overall = summarize_predictions(rows, self.config.normalization)
         metrics = {
@@ -196,6 +203,7 @@ class BenchmarkRunner:
             "model_id": spec.model_id,
             "overall": overall,
             "per_language": per_language,
+            "per_dataset": per_dataset,
             "predictions_path": str(predictions_path),
         }
         metrics_path.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -208,6 +216,7 @@ class BenchmarkRunner:
             return
         fields = [
             "sample_id",
+            "dataset_id",
             "language",
             "language_config",
             "reference",
@@ -229,6 +238,7 @@ class BenchmarkRunner:
         path = self.output_root / "summary.csv"
         fields = [
             "model",
+            "dataset_id",
             "language",
             "num_scored",
             "num_errors",
@@ -246,15 +256,34 @@ class BenchmarkRunner:
                 writer.writerow(
                     {
                         "model": model,
+                        "dataset_id": "ALL",
                         "language": "ALL",
-                        **{k: overall.get(k) for k in fields if k not in {"model", "language"}},
+                        **{k: overall.get(k) for k in fields if k not in {"model", "dataset_id", "language"}},
                     }
                 )
+                for ds_id, ds_metrics in (metrics.get("per_dataset") or {}).items():
+                    writer.writerow(
+                        {
+                            "model": model,
+                            "dataset_id": ds_id,
+                            "language": "ALL",
+                            **{
+                                k: ds_metrics.get(k)
+                                for k in fields
+                                if k not in {"model", "dataset_id", "language"}
+                            },
+                        }
+                    )
                 for lang, lang_metrics in (metrics.get("per_language") or {}).items():
                     writer.writerow(
                         {
                             "model": model,
+                            "dataset_id": "ALL",
                             "language": lang,
-                            **{k: lang_metrics.get(k) for k in fields if k not in {"model", "language"}},
+                            **{
+                                k: lang_metrics.get(k)
+                                for k in fields
+                                if k not in {"model", "dataset_id", "language"}
+                            },
                         }
                     )

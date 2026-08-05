@@ -57,7 +57,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--dataset-id",
         default=None,
-        help="Hugging Face dataset id, e.g. google/fleurs or mozilla-foundation/common_voice_17_0",
+        help="Hugging Face dataset id, e.g. google/fleurs or smutuvi/ndizi-1",
+    )
+    p.add_argument(
+        "--source",
+        action="append",
+        dest="sources",
+        default=None,
+        help=(
+            "Additional HF dataset source (repeatable). "
+            "Format: org/name or org/name:split (e.g. smutuvi/ndizi-1:test)."
+        ),
     )
     p.add_argument(
         "--dataset-type",
@@ -125,6 +135,11 @@ def apply_overrides(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, 
         ds["type"] = args.dataset_type
     if args.dataset_id:
         ds["dataset_id"] = args.dataset_id
+    if args.sources:
+        ds["type"] = ds.get("type") or "huggingface"
+        existing = list(ds.get("sources") or [])
+        existing.extend(args.sources)
+        ds["sources"] = existing
     if args.config_name:
         ds["config_name"] = args.config_name
     if args.split:
@@ -212,6 +227,11 @@ def main(argv: Optional[list[str]] = None) -> int:
             f"CER={overall.get('cer_normalized')} "
             f"scored={overall.get('num_scored')} errors={overall.get('num_errors')}"
         )
+        for ds_id, dm in (metrics.get("per_dataset") or {}).items():
+            print(
+                f"  [dataset] {ds_id}: WER={dm.get('wer_normalized')} "
+                f"CER={dm.get('cer_normalized')} n={dm.get('num_scored')}"
+            )
         for lang, lm in (metrics.get("per_language") or {}).items():
             print(
                 f"  - {lang}: WER={lm.get('wer_normalized')} CER={lm.get('cer_normalized')} "

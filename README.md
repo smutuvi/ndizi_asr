@@ -67,23 +67,28 @@ Full FLEURS test set:
 ./scripts/run_sunbird.sh
 ```
 
+## Ndizi (`smutuvi/ndizi-1` + `smutuvi/ndizi-1-2025`)
+
+Compare Gemini 2.5 Flash and Sunbird on both Ndizi test sets:
+
+```bash
+# Smoke (2 samples per dataset)
+./scripts/run_ndizi_smoke.sh
+
+# Full test splits
+./scripts/run_ndizi.sh
+```
+
 Or:
 
 ```bash
 python -m gemini_asr_bench.cli \
-  --config configs/fleurs_sunbird.yaml \
+  --config configs/ndizi_gemini_sunbird.yaml \
+  --model google/gemini-2.5-flash \
   --model Sunbird/asr-whisper-51-african-languages
 ```
 
-Compare Gemini 2.5 + Sunbird in one run:
-
-```bash
-python -m gemini_asr_bench.cli \
-  --config configs/fleurs_afro.yaml \
-  --model google/gemini-2.5-flash \
-  --model Sunbird/asr-whisper-51-african-languages \
-  --experiment-name fleurs_gemini25_vs_sunbird
-```
+Requires `OPENROUTER_API_KEY` and `HF_TOKEN` in `.env`.
 
 ## Any Hugging Face dataset
 
