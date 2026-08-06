@@ -42,31 +42,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--model",
-        action="append",
+        nargs="+",
         dest="models",
         default=None,
+        metavar="MODEL",
         help=(
-            "Model id (repeatable). Examples: google/gemini-2.5-flash, "
-            "google/gemma-4-E2B-it, Sunbird/Sunflower-Gemma4-E2B, "
-            "Sunbird/asr-whisper-51-african-languages. "
-            "Short aliases: google/gemma-4-e2b, sunbird/gemma-4-e2b."
+            "One or more model ids (space-separated). Examples: "
+            "--model google/gemma-4-e2b sunbird/gemma-4-e2b "
+            "google/gemini-2.5-flash Sunbird/asr-whisper-51-african-languages"
         ),
     )
     p.add_argument(
         "--dataset",
-        action="append",
+        nargs="+",
         dest="datasets",
         default=None,
+        metavar="DATASET",
         help=(
-            "HF dataset to evaluate (repeatable). Examples: smutuvi/ndizi-1, "
-            "smutuvi/ndizi-1-2025, google/fleurs, google/fleurs:sw_ke:test. "
+            "One or more HF datasets (space-separated). Examples: "
+            "--dataset smutuvi/ndizi-1 smutuvi/ndizi-1-2025 google/fleurs. "
             "Alias: --datasets."
         ),
     )
     p.add_argument(
         "--datasets",
-        action="append",
+        nargs="+",
         dest="datasets",
+        metavar="DATASET",
         help=argparse.SUPPRESS,
     )
     p.add_argument(
@@ -76,11 +78,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--source",
-        action="append",
+        nargs="+",
         dest="sources",
         default=None,
+        metavar="SOURCE",
         help=(
-            "Additional HF dataset source (repeatable). "
+            "Additional HF dataset sources (space-separated). "
             "Format: org/name or org/name:split."
         ),
     )
@@ -97,10 +100,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--language",
-        action="append",
+        nargs="+",
         dest="languages",
         default=None,
-        help="Language mapping NAME=CONFIG (repeatable), e.g. swahili=sw_ke",
+        metavar="NAME=CONFIG",
+        help="Language mappings (space-separated), e.g. --language swahili=sw_ke amharic=am_et",
     )
     p.add_argument("--split", default=None, help="Dataset split (default: test)")
     p.add_argument("--audio-column", default=None)

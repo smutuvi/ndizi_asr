@@ -7,9 +7,7 @@ export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 python -m gemini_asr_bench.cli \
   --env-file .env \
-  --model google/gemma-4-E2B-it \
-  --model Sunbird/Sunflower-Gemma4-E2B \
-  --dataset smutuvi/ndizi-1 \
-  --dataset smutuvi/ndizi-1-2025 \
+  --model google/gemma-4-E2B-it Sunbird/Sunflower-Gemma4-E2B \
+  --dataset smutuvi/ndizi-1 smutuvi/ndizi-1-2025 \
   --experiment-name gemma4_e2b_ndizi \
   "$@"

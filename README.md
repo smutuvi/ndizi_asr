@@ -99,19 +99,15 @@ pip install -e ".[local]"
 
 # Smoke on Ndizi
 python -m gemini_asr_bench.cli \
-  --model google/gemma-4-E2B-it \
-  --model Sunbird/Sunflower-Gemma4-E2B \
-  --dataset smutuvi/ndizi-1 \
-  --dataset smutuvi/ndizi-1-2025 \
+  --model google/gemma-4-E2B-it Sunbird/Sunflower-Gemma4-E2B \
+  --dataset smutuvi/ndizi-1 smutuvi/ndizi-1-2025 \
   --max-samples 2 \
   --experiment-name gemma4_e2b_ndizi_smoke
 
 # Or use aliases + FLEURS
 python -m gemini_asr_bench.cli \
-  --model google/gemma-4-e2b \
-  --model sunbird/gemma-4-e2b \
-  --dataset smutuvi/ndizi-1 \
-  --dataset google/fleurs \
+  --model google/gemma-4-e2b sunbird/gemma-4-e2b \
+  --dataset smutuvi/ndizi-1 google/fleurs \
   --max-samples 5
 ```
 

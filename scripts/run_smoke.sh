@@ -13,13 +13,8 @@ fi
 python -m gemini_asr_bench.cli \
   --config configs/fleurs_afro.yaml \
   --env-file .env \
-  --model google/gemini-2.5-flash \
-  --model google/gemini-3.5-flash \
-  --model google/gemini-3.6-flash \
-  --language swahili=sw_ke \
-  --language amharic=am_et \
-  --language oromo=om_et \
-  --language hausa=ha_ng \
+  --model google/gemini-2.5-flash google/gemini-3.5-flash google/gemini-3.6-flash \
+  --language swahili=sw_ke amharic=am_et oromo=om_et hausa=ha_ng \
   --max-samples 2 \
   --experiment-name fleurs_smoke_flash_compare \
   --concurrency 2 \
