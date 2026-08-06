@@ -84,8 +84,7 @@ Or:
 ```bash
 python -m gemini_asr_bench.cli \
   --config configs/ndizi_gemini_sunbird.yaml \
-  --model google/gemini-2.5-flash \
-  --model Sunbird/asr-whisper-51-african-languages
+  --model google/gemini-2.5-flash Sunbird/asr-whisper-51-african-languages
 ```
 
 Requires `OPENROUTER_API_KEY` and `HF_TOKEN` in `.env`.
