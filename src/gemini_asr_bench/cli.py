@@ -10,13 +10,10 @@ from typing import Any, Optional
 import yaml
 from dotenv import load_dotenv
 
-from .backends.resolve import needs_openrouter, parse_model_spec
+from .backends.resolve import needs_hf_auth, needs_openrouter, parse_model_spec
 from .config import load_run_config
+from .datasets.presets import expand_dataset_flags
 from .evaluate import BenchmarkRunner
-
-
-def _needs_hf_token(models: list[str]) -> bool:
-    return any(parse_model_spec(m).backend == "hf_whisper" for m in models)
 
 
 def _parse_kv_pairs(items: list[str]) -> dict[str, str]:
@@ -34,14 +31,14 @@ def build_parser() -> argparse.ArgumentParser:
         prog="gemini-asr-bench",
         description=(
             "Benchmark ASR models on Hugging Face datasets via OpenRouter "
-            "or local Whisper checkpoints (e.g. Sunbird)."
+            "(Gemini) or local HF checkpoints (Whisper / Gemma 4)."
         ),
     )
     p.add_argument(
         "--config",
         type=Path,
-        default=Path("configs/fleurs_afro.yaml"),
-        help="YAML config path (default: configs/fleurs_afro.yaml)",
+        default=None,
+        help="Optional YAML config path. If omitted, build the run from CLI flags.",
     )
     p.add_argument(
         "--model",
@@ -49,15 +46,33 @@ def build_parser() -> argparse.ArgumentParser:
         dest="models",
         default=None,
         help=(
-            "Model id (repeatable). OpenRouter ids like google/gemini-2.5-flash, "
-            "or local HF Whisper ids like Sunbird/asr-whisper-51-african-languages "
-            "(prefix with hf: if needed)."
+            "Model id (repeatable). Examples: google/gemini-2.5-flash, "
+            "google/gemma-4-E2B-it, Sunbird/Sunflower-Gemma4-E2B, "
+            "Sunbird/asr-whisper-51-african-languages. "
+            "Short aliases: google/gemma-4-e2b, sunbird/gemma-4-e2b."
         ),
+    )
+    p.add_argument(
+        "--dataset",
+        action="append",
+        dest="datasets",
+        default=None,
+        help=(
+            "HF dataset to evaluate (repeatable). Examples: smutuvi/ndizi-1, "
+            "smutuvi/ndizi-1-2025, google/fleurs, google/fleurs:sw_ke:test. "
+            "Alias: --datasets."
+        ),
+    )
+    p.add_argument(
+        "--datasets",
+        action="append",
+        dest="datasets",
+        help=argparse.SUPPRESS,
     )
     p.add_argument(
         "--dataset-id",
         default=None,
-        help="Hugging Face dataset id, e.g. google/fleurs or smutuvi/ndizi-1",
+        help="Single Hugging Face dataset id (legacy; prefer --dataset).",
     )
     p.add_argument(
         "--source",
@@ -66,7 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Additional HF dataset source (repeatable). "
-            "Format: org/name or org/name:split (e.g. smutuvi/ndizi-1:test)."
+            "Format: org/name or org/name:split."
         ),
     )
     p.add_argument(
@@ -87,18 +102,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Language mapping NAME=CONFIG (repeatable), e.g. swahili=sw_ke",
     )
-    p.add_argument("--split", default=None, help="Dataset split (default from config)")
+    p.add_argument("--split", default=None, help="Dataset split (default: test)")
     p.add_argument("--audio-column", default=None)
     p.add_argument("--text-column", default=None)
     p.add_argument("--max-samples", type=int, default=None, help="Cap samples per language/config")
     p.add_argument("--streaming", action="store_true", default=None)
     p.add_argument("--no-streaming", action="store_true", default=False)
     p.add_argument("--concurrency", type=int, default=None)
-    p.add_argument("--device", default=None, help="Local Whisper device: cuda|mps|cpu")
+    p.add_argument("--device", default=None, help="Local model device: cuda|mps|cpu")
     p.add_argument(
         "--torch-dtype",
         default=None,
-        help="Local Whisper dtype: auto|float16|bfloat16|float32",
+        help="Local model dtype: auto|float16|bfloat16|float32",
     )
     p.add_argument("--output-dir", default=None)
     p.add_argument("--experiment-name", default=None)
@@ -108,6 +123,48 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--env-file", type=Path, default=Path(".env"))
     p.add_argument("-v", "--verbose", action="store_true")
     return p
+
+
+def _default_raw_config() -> dict[str, Any]:
+    return {
+        "experiment_name": "cli_asr_bench",
+        "models": [],
+        "dataset": {
+            "type": "huggingface",
+            "split": "test",
+            "language": "swahili",
+            "audio_column": "audio",
+            "text_column": "text",
+            "sources": [],
+        },
+        "openrouter": {
+            "base_url": "https://openrouter.ai/api/v1",
+            "timeout_seconds": 120,
+            "max_retries": 5,
+            "retry_backoff_seconds": 2.0,
+            "temperature": 0.0,
+            "max_tokens": 1024,
+        },
+        "local_whisper": {
+            "device": None,
+            "torch_dtype": "auto",
+            "num_beams": 1,
+            "concurrency": 1,
+        },
+        "prompt": (
+            "Transcribe the speech in this audio exactly. "
+            "Return only the transcript text with no commentary or labels."
+        ),
+        "normalization": {
+            "lowercase": True,
+            "strip_punctuation": True,
+            "collapse_whitespace": True,
+        },
+        "concurrency": 4,
+        "output_dir": "results",
+        "resume": True,
+        "save_every": 20,
+    }
 
 
 def apply_overrides(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
@@ -135,11 +192,6 @@ def apply_overrides(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, 
         ds["type"] = args.dataset_type
     if args.dataset_id:
         ds["dataset_id"] = args.dataset_id
-    if args.sources:
-        ds["type"] = ds.get("type") or "huggingface"
-        existing = list(ds.get("sources") or [])
-        existing.extend(args.sources)
-        ds["sources"] = existing
     if args.config_name:
         ds["config_name"] = args.config_name
     if args.split:
@@ -156,6 +208,27 @@ def apply_overrides(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, 
         ds["streaming"] = False
     if args.languages:
         ds["languages"] = _parse_kv_pairs(args.languages)
+
+    # --dataset / --datasets / --source → multi-source HF evaluation
+    dataset_tokens: list[str] = []
+    if args.datasets:
+        dataset_tokens.extend(args.datasets)
+    if args.sources:
+        dataset_tokens.extend(args.sources)
+    if dataset_tokens:
+        langs = ds.get("languages") if isinstance(ds.get("languages"), dict) else None
+        expanded = expand_dataset_flags(
+            dataset_tokens,
+            default_split=str(ds.get("split") or "test"),
+            default_language=str(ds.get("language") or "swahili"),
+            languages=langs,
+            audio_column=ds.get("audio_column"),
+            text_column=ds.get("text_column"),
+            max_samples=ds.get("max_samples"),
+        )
+        ds["type"] = "huggingface"
+        # Replace sources when explicitly provided on CLI to avoid mixing stale config sources
+        ds["sources"] = expanded
 
     if args.device:
         local["device"] = args.device
@@ -181,15 +254,37 @@ def main(argv: Optional[list[str]] = None) -> int:
     else:
         load_dotenv()
 
-    if not args.config.exists():
-        logging.error("Config not found: %s", args.config)
-        return 2
-
-    with args.config.open("r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f) or {}
+    if args.config is None:
+        raw = _default_raw_config()
+    else:
+        if not args.config.exists():
+            logging.error("Config not found: %s", args.config)
+            return 2
+        with args.config.open("r", encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
 
     raw = apply_overrides(raw, args)
     config = load_run_config(raw)
+
+    if not config.models:
+        logging.error("No models specified. Pass --model ... or set models in --config.")
+        return 2
+    has_data = (
+        bool(config.dataset.sources)
+        or (config.dataset.type in {"fleurs", "google/fleurs"})
+        or bool(config.dataset.dataset_id)
+    )
+    if not has_data:
+        logging.error(
+            "No datasets specified. Pass --dataset smutuvi/ndizi-1 --dataset google/fleurs "
+            "or provide a YAML --config."
+        )
+        return 2
+
+    # Log resolved model backends for clarity
+    for m in config.models:
+        spec = parse_model_spec(m)
+        logging.info("Model %s → backend=%s id=%s", m, spec.backend, spec.model_id)
 
     env_base = os.getenv("OPENROUTER_BASE_URL")
     if env_base:
@@ -199,8 +294,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if needs_openrouter(config.models) and not api_key:
         logging.error(
             "OPENROUTER_API_KEY not set, but OpenRouter models were requested. "
-            "Copy .env.example to .env and add your key, or pass only local models "
-            "like Sunbird/asr-whisper-51-african-languages."
+            "Copy .env.example to .env and add your key, or pass only local models."
         )
         return 2
 
@@ -209,11 +303,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         or os.getenv("HUGGINGFACE_HUB_TOKEN", "").strip()
         or os.getenv("HUGGING_FACE_HUB_TOKEN", "").strip()
     )
-    if _needs_hf_token(config.models) and not hf_token:
+    if needs_hf_auth(config.models) and not hf_token:
         logging.warning(
-            "Local Whisper/Sunbird models usually need HF auth for gated repos. "
-            "Accept terms at https://huggingface.co/Sunbird/asr-whisper-51-african-languages "
-            "and set HF_TOKEN in .env (or run: huggingface-cli login)."
+            "Local HF models usually need auth for gated repos (Gemma / Sunbird). "
+            "Accept model terms on Hugging Face and set HF_TOKEN in .env "
+            "(or run: huggingface-cli login)."
         )
 
     runner = BenchmarkRunner(config, api_key=api_key)

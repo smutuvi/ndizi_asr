@@ -12,6 +12,7 @@ from typing import Any, Optional
 from tqdm import tqdm
 
 from .backends.resolve import parse_model_spec
+from .backends.gemma_hf import HuggingFaceGemmaASRClient
 from .backends.whisper_hf import HuggingFaceWhisperClient
 from .client import OpenRouterASRClient, audio_array_to_wav_base64
 from .config import RunConfig
@@ -35,6 +36,7 @@ class BenchmarkRunner:
         self.api_key = api_key
         self.openrouter_client: Optional[OpenRouterASRClient] = None
         self._whisper_clients: dict[str, HuggingFaceWhisperClient] = {}
+        self._gemma_clients: dict[str, HuggingFaceGemmaASRClient] = {}
         self.output_root = Path(config.output_dir) / config.experiment_name
         self.output_root.mkdir(parents=True, exist_ok=True)
 
@@ -58,6 +60,16 @@ class BenchmarkRunner:
                 num_beams=lw.num_beams,
             )
         return self._whisper_clients[model_id]
+
+    def _get_gemma(self, model_id: str) -> HuggingFaceGemmaASRClient:
+        if model_id not in self._gemma_clients:
+            lw = self.config.local_whisper
+            self._gemma_clients[model_id] = HuggingFaceGemmaASRClient(
+                model_id,
+                device=lw.device,
+                torch_dtype=lw.torch_dtype,
+            )
+        return self._gemma_clients[model_id]
 
     def run(self, models: Optional[list[str]] = None) -> dict[str, Any]:
         models = models or self.config.models
@@ -116,9 +128,11 @@ class BenchmarkRunner:
             len(samples),
         )
 
-        # Fail fast (and avoid concurrent model downloads) for local Whisper.
+        # Fail fast (and avoid concurrent model downloads) for local models.
         if spec.backend == "hf_whisper":
             self._get_whisper(spec.model_id)
+        elif spec.backend == "hf_gemma":
+            self._get_gemma(spec.model_id)
 
         buffer: list[dict[str, Any]] = []
 
@@ -139,6 +153,15 @@ class BenchmarkRunner:
                     sample.sampling_rate,
                     language=sample.language,
                     language_config=sample.language_config,
+                )
+            elif spec.backend == "hf_gemma":
+                client = self._get_gemma(spec.model_id)
+                result = client.transcribe_array(
+                    sample.audio_array,
+                    sample.sampling_rate,
+                    language=sample.language,
+                    language_config=sample.language_config,
+                    prompt=self.config.prompt,
                 )
             else:
                 audio_b64, fmt = audio_array_to_wav_base64(
@@ -169,7 +192,7 @@ class BenchmarkRunner:
 
         workers = (
             self.config.local_whisper.concurrency
-            if spec.backend == "hf_whisper"
+            if spec.backend in {"hf_whisper", "hf_gemma"}
             else self.config.concurrency
         )
         with ThreadPoolExecutor(max_workers=workers) as pool:

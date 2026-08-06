@@ -1,8 +1,14 @@
 from __future__ import annotations
 
-from gemini_asr_bench.backends.resolve import needs_openrouter, parse_model_spec
+from gemini_asr_bench.backends.resolve import (
+    canonicalize_model_id,
+    needs_hf_auth,
+    needs_openrouter,
+    parse_model_spec,
+)
 from gemini_asr_bench.backends.sunbird_langs import resolve_sunbird_language_code
 from gemini_asr_bench.config import NormalizationConfig, load_run_config
+from gemini_asr_bench.datasets.presets import expand_dataset_flags
 from gemini_asr_bench.metrics import normalize_text, summarize_predictions
 
 
@@ -41,11 +47,14 @@ def test_summarize_predictions():
 def test_parse_model_spec_backends():
     assert parse_model_spec("google/gemini-2.5-flash").backend == "openrouter"
     assert parse_model_spec("Sunbird/asr-whisper-51-african-languages").backend == "hf_whisper"
-    assert parse_model_spec("hf:Sunbird/asr-whisper-51-african-languages").model_id == (
-        "Sunbird/asr-whisper-51-african-languages"
-    )
-    assert needs_openrouter(["Sunbird/asr-whisper-51-african-languages"]) is False
-    assert needs_openrouter(["google/gemini-2.5-flash"]) is True
+    assert parse_model_spec("google/gemma-4-E2B-it").backend == "hf_gemma"
+    assert parse_model_spec("google/gemma-4-e2b").model_id == "google/gemma-4-E2B-it"
+    assert parse_model_spec("sunbird/gemma-4-e2b").backend == "hf_gemma"
+    assert parse_model_spec("sunbird/gemma-4-e2b").model_id == "Sunbird/Sunflower-Gemma4-E2B"
+    assert parse_model_spec("Sunbird/Sunflower-Gemma4-E2B").backend == "hf_gemma"
+    assert needs_openrouter(["sunbird/gemma-4-e2b"]) is False
+    assert needs_hf_auth(["google/gemma-4-e2b", "Sunbird/asr-whisper-51-african-languages"]) is True
+    assert canonicalize_model_id("gemma-4-e2b") == "google/gemma-4-E2B-it"
 
 
 def test_resolve_sunbird_language_code():
@@ -80,3 +89,17 @@ def test_load_multi_source_config():
     assert cfg.dataset.sources[0].split == "test"
     assert cfg.dataset.sources[0].language == "swahili"
     assert cfg.dataset.sources[1].dataset_id == "smutuvi/ndizi-1-2025"
+
+
+def test_expand_dataset_flags():
+    sources = expand_dataset_flags(
+        ["smutuvi/ndizi-1", "smutuvi/ndizi-1-2025", "google/fleurs"],
+        max_samples=2,
+    )
+    assert sources[0]["dataset_id"] == "smutuvi/ndizi-1"
+    assert sources[0]["text_column"] == "text"
+    assert sources[1]["dataset_id"] == "smutuvi/ndizi-1-2025"
+    fleurs = [s for s in sources if s["dataset_id"] == "google/fleurs"]
+    assert len(fleurs) == 4
+    assert {s["config_name"] for s in fleurs} == {"sw_ke", "am_et", "om_et", "ha_ng"}
+    assert all(s["max_samples"] == 2 for s in sources)

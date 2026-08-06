@@ -90,6 +90,37 @@ python -m gemini_asr_bench.cli \
 
 Requires `OPENROUTER_API_KEY` and `HF_TOKEN` in `.env`.
 
+## Gemma 4 E2B (Google + Sunbird)
+
+Local multimodal Gemma ASR (no OpenRouter). Accept Gemma / Sunbird model terms and set `HF_TOKEN`.
+
+```bash
+pip install -e ".[local]"
+
+# Smoke on Ndizi
+python -m gemini_asr_bench.cli \
+  --model google/gemma-4-E2B-it \
+  --model Sunbird/Sunflower-Gemma4-E2B \
+  --dataset smutuvi/ndizi-1 \
+  --dataset smutuvi/ndizi-1-2025 \
+  --max-samples 2 \
+  --experiment-name gemma4_e2b_ndizi_smoke
+
+# Or use aliases + FLEURS
+python -m gemini_asr_bench.cli \
+  --model google/gemma-4-e2b \
+  --model sunbird/gemma-4-e2b \
+  --dataset smutuvi/ndizi-1 \
+  --dataset google/fleurs \
+  --max-samples 5
+```
+
+Helper script:
+
+```bash
+./scripts/run_gemma4_ndizi.sh --max-samples 2
+```
+
 ## Any Hugging Face dataset
 
 Use `dataset.type: huggingface` (see `configs/huggingface_example.yaml`) or CLI flags:
