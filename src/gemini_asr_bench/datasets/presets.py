@@ -11,6 +11,12 @@ FLEURS_DEFAULT_LANGUAGES = {
     "hausa": "ha_ng",
 }
 
+# WaxalNLP ASR configs for Sikia languages (Hausa/Swahili are TTS-only on Hub).
+WAXAL_ASR_LANGUAGES = {
+    "amharic": "amh_asr",
+    "oromo": "orm_asr",
+}
+
 # Known Hub datasets with sensible ASR column defaults.
 DATASET_PRESETS: dict[str, dict[str, Any]] = {
     "smutuvi/ndizi-1": {
@@ -37,6 +43,27 @@ DATASET_PRESETS: dict[str, dict[str, Any]] = {
         "text_column": "transcription",
         "split": "test",
         "expand_fleurs_languages": True,
+    },
+    "google/WaxalNLP": {
+        "dataset_id": "google/WaxalNLP",
+        "audio_column": "audio",
+        "text_column": "transcription",
+        "split": "test",
+        "expand_waxal_languages": True,
+    },
+    "google/waxalnlp": {
+        "dataset_id": "google/WaxalNLP",
+        "audio_column": "audio",
+        "text_column": "transcription",
+        "split": "test",
+        "expand_waxal_languages": True,
+    },
+    "waxalnlp": {
+        "dataset_id": "google/WaxalNLP",
+        "audio_column": "audio",
+        "text_column": "transcription",
+        "split": "test",
+        "expand_waxal_languages": True,
     },
 }
 
@@ -99,6 +126,21 @@ def expand_dataset_flags(
                 )
             continue
 
+        if preset.get("expand_waxal_languages") and not config_name:
+            for lang_name, waxal_cfg in WAXAL_ASR_LANGUAGES.items():
+                sources.append(
+                    {
+                        "dataset_id": dataset_id,
+                        "config_name": waxal_cfg,
+                        "split": resolved_split,
+                        "language": lang_name,
+                        "audio_column": resolved_audio or "audio",
+                        "text_column": resolved_text or "transcription",
+                        "max_samples": max_samples,
+                    }
+                )
+            continue
+
         entry: dict[str, Any] = {
             "dataset_id": dataset_id,
             "split": resolved_split,
@@ -107,9 +149,13 @@ def expand_dataset_flags(
         }
         if config_name:
             entry["config_name"] = config_name
-            # If user passed fleurs config, map language name when known
+            # Map known fleurs / Waxal configs to language names
             for lang_name, fleurs_cfg in fleurs_langs.items():
                 if fleurs_cfg == config_name:
+                    entry["language"] = lang_name
+                    break
+            for lang_name, waxal_cfg in WAXAL_ASR_LANGUAGES.items():
+                if waxal_cfg == config_name:
                     entry["language"] = lang_name
                     break
         if resolved_audio:

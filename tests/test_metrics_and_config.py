@@ -103,3 +103,13 @@ def test_expand_dataset_flags():
     assert len(fleurs) == 4
     assert {s["config_name"] for s in fleurs} == {"sw_ke", "am_et", "om_et", "ha_ng"}
     assert all(s["max_samples"] == 2 for s in sources)
+
+
+def test_expand_waxalnlp_dataset_flags():
+    sources = expand_dataset_flags(["google/WaxalNLP", "google/WaxalNLP:amh_asr"], max_samples=3)
+    waxal = [s for s in sources if s["dataset_id"] == "google/WaxalNLP"]
+    # Bare google/WaxalNLP expands to amh_asr + orm_asr only (no hau/swa ASR).
+    expanded = [s for s in waxal if s.get("config_name") in {"amh_asr", "orm_asr"}]
+    assert len(expanded) >= 2
+    assert {s["config_name"] for s in expanded} == {"amh_asr", "orm_asr"}
+    assert any(s["language"] == "amharic" and s["config_name"] == "amh_asr" for s in waxal)

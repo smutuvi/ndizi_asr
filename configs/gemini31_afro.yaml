@@ -1,0 +1,80 @@
+# Gemini 3.1 Flash Lite on FLEURS + WaxalNLP (am/om) + Ndizi Swahili.
+# WaxalNLP has ASR configs for Amharic/Oromo only (Hausa/Swahili are TTS).
+experiment_name: gemini31_flash_lite_afro
+
+models:
+  - google/gemini-3.1-flash-lite
+
+dataset:
+  type: huggingface
+  language: swahili
+  split: test
+  audio_column: audio
+  text_column: transcription
+  max_samples: null
+  streaming: false
+  sources:
+    # FLEURS: sw / am / om / ha
+    - dataset_id: google/fleurs
+      config_name: sw_ke
+      split: test
+      language: swahili
+      text_column: transcription
+    - dataset_id: google/fleurs
+      config_name: am_et
+      split: test
+      language: amharic
+      text_column: transcription
+    - dataset_id: google/fleurs
+      config_name: om_et
+      split: test
+      language: oromo
+      text_column: transcription
+    - dataset_id: google/fleurs
+      config_name: ha_ng
+      split: test
+      language: hausa
+      text_column: transcription
+    # WaxalNLP ASR: am / om only
+    - dataset_id: google/WaxalNLP
+      config_name: amh_asr
+      split: test
+      language: amharic
+      text_column: transcription
+    - dataset_id: google/WaxalNLP
+      config_name: orm_asr
+      split: test
+      language: oromo
+      text_column: transcription
+    # Ndizi Swahili
+    - dataset_id: smutuvi/ndizi-1
+      split: test
+      language: swahili
+      text_column: text
+    - dataset_id: smutuvi/ndizi-1-2025
+      split: test
+      language: swahili
+      text_column: text
+
+openrouter:
+  base_url: https://openrouter.ai/api/v1
+  timeout_seconds: 120
+  max_retries: 5
+  retry_backoff_seconds: 2.0
+  temperature: 0.0
+  max_tokens: 1024
+
+prompt: >
+  Transcribe the speech in this audio exactly.
+  Return only the transcript text with no commentary, labels, or punctuation
+  beyond what is spoken. Preserve the original language of the audio.
+
+normalization:
+  lowercase: true
+  strip_punctuation: true
+  collapse_whitespace: true
+
+concurrency: 4
+output_dir: results
+resume: true
+save_every: 20

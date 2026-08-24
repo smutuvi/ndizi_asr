@@ -89,6 +89,36 @@ python -m gemini_asr_bench.cli \
 
 Requires `OPENROUTER_API_KEY` and `HF_TOKEN` in `.env`.
 
+## Gemini 3.1 Flash Lite (FLEURS + WaxalNLP + Ndizi)
+
+Evaluate `google/gemini-3.1-flash-lite` on Swahili, Amharic, Oromo, and Hausa:
+
+| Source | Languages |
+|--------|-----------|
+| `google/fleurs` | sw / am / om / ha |
+| `google/WaxalNLP` | am (`amh_asr`) / om (`orm_asr`) only — no hau/swa ASR configs |
+| `smutuvi/ndizi-1` + `ndizi-1-2025` | sw |
+
+```bash
+# Smoke (2 samples per source)
+./scripts/run_gemini31.sh --max-samples 2
+
+# Full test splits
+./scripts/run_gemini31.sh
+
+# Or Pro instead of Flash Lite
+./scripts/run_gemini31.sh --model google/gemini-3.1-pro-preview
+```
+
+Equivalent CLI:
+
+```bash
+python -m gemini_asr_bench.cli \
+  --model google/gemini-3.1-flash-lite \
+  --dataset smutuvi/ndizi-1 smutuvi/ndizi-1-2025 google/fleurs google/WaxalNLP \
+  --experiment-name gemini31_flash_lite_afro
+```
+
 ## Gemma 4 E2B (Google + Sunbird)
 
 Local multimodal Gemma ASR (no OpenRouter). Accept Gemma / Sunbird model terms and set `HF_TOKEN`.
