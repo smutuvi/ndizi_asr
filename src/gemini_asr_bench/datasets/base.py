@@ -98,7 +98,7 @@ def _load_hf_split(
         ds = load_dataset(dataset_id, **kwargs)
 
     cols = list(ds.column_names) if hasattr(ds, "column_names") else []
-    if "audio" in cols:
+    if "audio" in cols and not streaming:
         ds = ds.cast_column("audio", Audio(sampling_rate=16000))
     return ds
 

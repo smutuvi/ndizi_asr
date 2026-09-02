@@ -21,6 +21,7 @@ python -m gemini_asr_bench.cli \
          google/gemini-3.6-flash \
   --dataset smutuvi/ndizi-1 smutuvi/ndizi-1-2025 google/fleurs google/WaxalNLP \
   --max-samples "${MAX_SAMPLES}" \
+  --streaming \
   --experiment-name "flash_compare_n${MAX_SAMPLES}" \
   --concurrency 4 \
   "$@"

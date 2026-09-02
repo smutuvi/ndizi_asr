@@ -139,6 +139,7 @@ def _default_raw_config() -> dict[str, Any]:
             "language": "swahili",
             "audio_column": "audio",
             "text_column": "text",
+            "streaming": True,
             "sources": [],
         },
         "openrouter": {

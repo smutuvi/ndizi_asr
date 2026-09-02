@@ -76,12 +76,11 @@ class BenchmarkRunner:
         if not models:
             raise ValueError("No models specified. Pass --model or set models in config.")
 
-        loader = build_loader(self.config.dataset)
-        samples = list(loader.iter_samples())
-        if not samples:
-            raise RuntimeError("No evaluation samples loaded from dataset.")
+        if self.config.dataset.streaming:
+            logger.info("Streaming dataset samples (no bulk preload)")
+        else:
+            logger.info("Iterating dataset samples on demand")
 
-        logger.info("Loaded %d samples", len(samples))
         summary: dict[str, Any] = {
             "experiment_name": self.config.experiment_name,
             "created_at": _utc_now(),
@@ -90,7 +89,7 @@ class BenchmarkRunner:
         }
 
         for model in models:
-            model_summary = self._run_model(model, samples)
+            model_summary = self._run_model(model)
             summary["models"][model] = model_summary
 
         summary_path = self.output_root / "summary.json"
@@ -99,7 +98,13 @@ class BenchmarkRunner:
         logger.info("Wrote summary to %s", summary_path)
         return summary
 
-    def _run_model(self, model: str, samples: list[AudioSample]) -> dict[str, Any]:
+    def _iter_pending_samples(self, done_ids: set[str]):
+        loader = build_loader(self.config.dataset)
+        for sample in loader.iter_samples():
+            if sample.sample_id not in done_ids:
+                yield sample
+
+    def _run_model(self, model: str) -> dict[str, Any]:
         spec = parse_model_spec(model)
         model_dir = self.output_root / _slug(spec.raw)
         model_dir.mkdir(parents=True, exist_ok=True)
@@ -119,13 +124,12 @@ class BenchmarkRunner:
                     done_ids.add(str(row.get("sample_id")))
             logger.info("Resuming %s with %d existing predictions", model, len(done_ids))
 
-        pending = [s for s in samples if s.sample_id not in done_ids]
+        pending = self._iter_pending_samples(done_ids)
         logger.info(
-            "Model %s [%s]: %d pending / %d total",
+            "Model %s [%s]: streaming pending samples (skipping %d already done)",
             spec.model_id,
             spec.backend,
-            len(pending),
-            len(samples),
+            len(done_ids),
         )
 
         # Fail fast (and avoid concurrent model downloads) for local models.
@@ -195,15 +199,19 @@ class BenchmarkRunner:
             if spec.backend in {"hf_whisper", "hf_gemma"}
             else self.config.concurrency
         )
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(process_one, s): s for s in pending}
-            for fut in tqdm(as_completed(futures), total=len(futures), desc=spec.raw):
-                row = fut.result()
-                rows.append(row)
-                buffer.append(row)
-                if len(buffer) >= self.config.save_every:
-                    flush()
-            flush()
+        self._process_pending_samples(
+            pending,
+            process_one,
+            workers=workers,
+            desc=spec.raw,
+            rows=rows,
+            buffer=buffer,
+            flush=flush,
+        )
+        flush()
+
+        if not rows:
+            raise RuntimeError("No evaluation samples loaded from dataset.")
 
         by_lang: dict[str, list[dict[str, Any]]] = {}
         by_dataset: dict[str, list[dict[str, Any]]] = {}
@@ -232,6 +240,46 @@ class BenchmarkRunner:
         metrics_path.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
         self._write_predictions_csv(model_dir / "predictions.csv", rows)
         return metrics
+
+    def _process_pending_samples(
+        self,
+        pending,
+        process_one,
+        *,
+        workers: int,
+        desc: str,
+        rows: list[dict[str, Any]],
+        buffer: list[dict[str, Any]],
+        flush,
+    ) -> None:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            sample_iter = iter(pending)
+            in_flight: set = set()
+            pbar = tqdm(desc=desc)
+
+            def submit_next() -> None:
+                try:
+                    sample = next(sample_iter)
+                except StopIteration:
+                    return
+                in_flight.add(pool.submit(process_one, sample))
+
+            for _ in range(workers):
+                submit_next()
+
+            while in_flight:
+                for fut in as_completed(in_flight):
+                    in_flight.remove(fut)
+                    row = fut.result()
+                    rows.append(row)
+                    buffer.append(row)
+                    pbar.update(1)
+                    if len(buffer) >= self.config.save_every:
+                        flush()
+                    submit_next()
+                    break
+
+            pbar.close()
 
     @staticmethod
     def _write_predictions_csv(path: Path, rows: list[dict[str, Any]]) -> None:

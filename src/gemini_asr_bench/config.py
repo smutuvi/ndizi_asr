@@ -53,7 +53,7 @@ class DatasetConfig:
     text_column: str = "transcription"
     id_column: Optional[str] = None
     max_samples: Optional[int] = None
-    streaming: bool = False
+    streaming: bool = True
     revision: Optional[str] = None
     trust_remote_code: bool = False
     # Extra kwargs forwarded to datasets.load_dataset
@@ -178,7 +178,7 @@ def load_run_config(raw: dict[str, Any]) -> RunConfig:
             text_column=str(ds_raw.get("text_column", "transcription")),
             id_column=ds_raw.get("id_column"),
             max_samples=ds_raw.get("max_samples"),
-            streaming=bool(ds_raw.get("streaming", False)),
+            streaming=bool(ds_raw.get("streaming", True)),
             revision=ds_raw.get("revision"),
             trust_remote_code=bool(ds_raw.get("trust_remote_code", False)),
             load_kwargs=dict(ds_raw.get("load_kwargs") or {}),

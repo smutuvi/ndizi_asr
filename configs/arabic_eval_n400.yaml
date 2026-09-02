@@ -12,7 +12,7 @@ dataset:
   language: arabic
   split: test
   max_samples: 400
-  streaming: false
+  streaming: true
   sources:
     # Read Egyptian (benchmark)
     - dataset_id: google/fleurs
