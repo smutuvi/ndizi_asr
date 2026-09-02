@@ -119,6 +119,44 @@ python -m gemini_asr_bench.cli \
   --experiment-name gemini31_flash_lite_afro
 ```
 
+## Flash model compare (Afro, cap 100/source)
+
+Compare Gemini 2.5 / 3.1 Flash Lite / 3.5 / 3.6 on FLEURS (sw/am/om/ha), WaxalNLP (am/om), and Ndizi:
+
+```bash
+# Smoke (default cap 100/source)
+./scripts/run_flash_compare_n100.sh
+
+# Smaller smoke
+MAX_SAMPLES=10 ./scripts/run_flash_compare_n100.sh
+```
+
+Results land in `results/flash_compare_n100/` (or `flash_compare_n10/` when overridden).
+
+## Arabic eval (4 models, cap 400/source)
+
+Compare the same four Flash models on Arabic read and broadcast speech:
+
+| Source | Notes |
+|--------|-------|
+| `google/fleurs` `ar_eg` test | Egyptian read speech |
+| `MohamedRashad/common-voice-18-arabic` test | Multi-dialect read |
+| `Esra11/mgb2-arabic` train | Broadcast; relative WER only |
+| `MightyStudent/Egyptian-ASR-MGB-3` train | Egyptian YouTube/broadcast |
+
+```bash
+# Smoke (10 samples per source)
+./scripts/run_arabic_eval_n400.sh --max-samples 10
+
+# Medium smoke
+./scripts/run_arabic_eval_n400.sh --max-samples 100
+
+# Full run (400 samples per source × 4 models ≈ 6,400 API calls)
+./scripts/run_arabic_eval_n400.sh
+```
+
+Requires `OPENROUTER_API_KEY` in `.env`. Results: `results/arabic_eval_n400/`.
+
 ## Gemma 4 E2B (Google + Sunbird)
 
 Local multimodal Gemma ASR (no OpenRouter). Accept Gemma / Sunbird model terms and set `HF_TOKEN`.
