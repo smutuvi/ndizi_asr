@@ -125,10 +125,10 @@ Compare Gemini 2.5 / 3.1 Flash Lite / 3.5 / 3.6 on FLEURS (sw/am/om/ha), WaxalNL
 
 ```bash
 # Smoke (default cap 100/source)
-./scripts/run_flash_compare_n100.sh
+./scripts/run_flash_compare.sh
 
 # Smaller smoke
-MAX_SAMPLES=10 ./scripts/run_flash_compare_n100.sh
+MAX_SAMPLES=10 ./scripts/run_flash_compare.sh
 ```
 
 Results land in `results/flash_compare_n100/` (or `flash_compare_n10/` when overridden).
