@@ -157,6 +157,23 @@ Compare the same four Flash models on Arabic read and broadcast speech:
 
 Requires `OPENROUTER_API_KEY` in `.env`. Results: `results/arabic_eval_n400/`.
 
+## Horn-ASR (Amharic + Oromo)
+
+LesanAI [Horn-ASR](https://huggingface.co/datasets/LesanAI/Horn-ASR): spontaneous interview speech, 1,000 test clips per language (`am` / `om`). Audio is stored as WAV + CSV (`file_name` / `transcript`).
+
+```bash
+# Quick smoke (20/lang)
+./scripts/run_horn_asr.sh --max-samples 20
+
+# Default in config (100/lang)
+./scripts/run_horn_asr.sh
+
+# Full test sets (1000/lang)
+./scripts/run_horn_asr.sh --max-samples 1000 --experiment-name horn_asr_gemini25_n1000
+```
+
+Results: `results/horn_asr_gemini25_n100/` (or the overridden experiment name).
+
 ## Gemma 4 E2B (Google + Sunbird)
 
 Local multimodal Gemma ASR (no OpenRouter). Accept Gemma / Sunbird model terms and set `HF_TOKEN`.

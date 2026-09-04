@@ -17,6 +17,12 @@ WAXAL_ASR_LANGUAGES = {
     "oromo": "orm_asr",
 }
 
+# LesanAI Horn-ASR configs (spontaneous interview speech; 1k test utts each).
+HORN_ASR_LANGUAGES = {
+    "amharic": "am",
+    "oromo": "om",
+}
+
 # Known Hub datasets with sensible ASR column defaults.
 DATASET_PRESETS: dict[str, dict[str, Any]] = {
     "smutuvi/ndizi-1": {
@@ -64,6 +70,30 @@ DATASET_PRESETS: dict[str, dict[str, Any]] = {
         "text_column": "transcription",
         "split": "test",
         "expand_waxal_languages": True,
+    },
+    "LesanAI/Horn-ASR": {
+        "dataset_id": "LesanAI/Horn-ASR",
+        "audio_column": "file_name",
+        "text_column": "transcript",
+        "id_column": "utterance_id",
+        "split": "test",
+        "expand_horn_languages": True,
+    },
+    "lesanai/horn-asr": {
+        "dataset_id": "LesanAI/Horn-ASR",
+        "audio_column": "file_name",
+        "text_column": "transcript",
+        "id_column": "utterance_id",
+        "split": "test",
+        "expand_horn_languages": True,
+    },
+    "horn-asr": {
+        "dataset_id": "LesanAI/Horn-ASR",
+        "audio_column": "file_name",
+        "text_column": "transcript",
+        "id_column": "utterance_id",
+        "split": "test",
+        "expand_horn_languages": True,
     },
 }
 
@@ -141,6 +171,22 @@ def expand_dataset_flags(
                 )
             continue
 
+        if preset.get("expand_horn_languages") and not config_name:
+            for lang_name, horn_cfg in HORN_ASR_LANGUAGES.items():
+                sources.append(
+                    {
+                        "dataset_id": dataset_id,
+                        "config_name": horn_cfg,
+                        "split": resolved_split,
+                        "language": lang_name,
+                        "audio_column": resolved_audio or "file_name",
+                        "text_column": resolved_text or "transcript",
+                        "id_column": preset.get("id_column") or "utterance_id",
+                        "max_samples": max_samples,
+                    }
+                )
+            continue
+
         entry: dict[str, Any] = {
             "dataset_id": dataset_id,
             "split": resolved_split,
@@ -149,7 +195,7 @@ def expand_dataset_flags(
         }
         if config_name:
             entry["config_name"] = config_name
-            # Map known fleurs / Waxal configs to language names
+            # Map known fleurs / Waxal / Horn configs to language names
             for lang_name, fleurs_cfg in fleurs_langs.items():
                 if fleurs_cfg == config_name:
                     entry["language"] = lang_name
@@ -158,10 +204,16 @@ def expand_dataset_flags(
                 if waxal_cfg == config_name:
                     entry["language"] = lang_name
                     break
+            for lang_name, horn_cfg in HORN_ASR_LANGUAGES.items():
+                if horn_cfg == config_name:
+                    entry["language"] = lang_name
+                    break
         if resolved_audio:
             entry["audio_column"] = resolved_audio
         if resolved_text:
             entry["text_column"] = resolved_text
+        if preset.get("id_column"):
+            entry["id_column"] = preset["id_column"]
         sources.append(entry)
 
     return sources

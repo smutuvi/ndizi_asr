@@ -20,7 +20,7 @@ class AudioSample:
     dataset_id: str = ""
 
 
-AUDIO_COLUMN_CANDIDATES = ["audio", "audio_path", "path", "file", "wav", "speech"]
+AUDIO_COLUMN_CANDIDATES = ["audio", "audio_path", "path", "file_name", "file", "wav", "speech"]
 TEXT_COLUMN_CANDIDATES = [
     "transcription",
     "raw_transcription",
@@ -41,6 +41,40 @@ def pick_column(columns: list[str], preferred: Optional[str], candidates: list[s
         if cand.lower() in cols_l:
             return cols_l[cand.lower()]
     raise ValueError(f"Could not find column from {candidates} in {columns}")
+
+
+def resolve_hub_audio_path(
+    dataset_id: str,
+    file_name: str,
+    *,
+    config_name: Optional[str] = None,
+    split: str = "test",
+) -> str:
+    """Resolve a basename like am_0001.wav to a local Hub cache path (Horn-ASR style)."""
+    from pathlib import Path
+
+    from huggingface_hub import hf_hub_download
+
+    if Path(file_name).exists():
+        return file_name
+
+    candidates: list[str] = []
+    if config_name:
+        candidates.append(f"{config_name}/{split}/{file_name}")
+        candidates.append(f"{config_name}/{file_name}")
+    candidates.append(f"{split}/{file_name}")
+    candidates.append(file_name)
+
+    last_err: Optional[Exception] = None
+    for rel in candidates:
+        try:
+            return hf_hub_download(repo_id=dataset_id, filename=rel, repo_type="dataset")
+        except Exception as exc:  # noqa: BLE001 - try next candidate
+            last_err = exc
+    raise FileNotFoundError(
+        f"Could not resolve audio {file_name!r} under {dataset_id} "
+        f"(config={config_name!r}, split={split!r})"
+    ) from last_err
 
 
 def extract_audio(value: Any) -> tuple[np.ndarray, int]:
@@ -166,7 +200,18 @@ class HuggingFaceDatasetLoader(BaseDatasetLoader):
             if not reference:
                 continue
 
-            audio_array, sr = extract_audio(row[audio_col])
+            audio_val = row[audio_col]
+            if isinstance(audio_val, str):
+                from pathlib import Path
+
+                if not Path(audio_val).exists():
+                    audio_val = resolve_hub_audio_path(
+                        self.dataset_id,
+                        audio_val,
+                        config_name=config_name,
+                        split=self.cfg.split,
+                    )
+            audio_array, sr = extract_audio(audio_val)
             raw_id = (
                 str(row[id_col])
                 if id_col and row.get(id_col) is not None

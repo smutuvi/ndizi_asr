@@ -113,3 +113,13 @@ def test_expand_waxalnlp_dataset_flags():
     assert len(expanded) >= 2
     assert {s["config_name"] for s in expanded} == {"amh_asr", "orm_asr"}
     assert any(s["language"] == "amharic" and s["config_name"] == "amh_asr" for s in waxal)
+
+
+def test_expand_horn_asr_dataset_flags():
+    sources = expand_dataset_flags(["LesanAI/Horn-ASR", "LesanAI/Horn-ASR:am"], max_samples=5)
+    horn = [s for s in sources if s["dataset_id"] == "LesanAI/Horn-ASR"]
+    assert any(s["config_name"] == "am" and s["language"] == "amharic" for s in horn)
+    assert any(s["config_name"] == "om" and s["language"] == "oromo" for s in horn)
+    assert all(s.get("text_column") == "transcript" for s in horn)
+    assert all(s.get("audio_column") == "file_name" for s in horn)
+    assert all(s.get("max_samples") == 5 for s in horn)
