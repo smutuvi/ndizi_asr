@@ -1,9 +1,23 @@
 #!/usr/bin/env bash
-# Smart fusion smoke: best-2 Ethio CTC + LLM editor (Opus by default).
+# Smart fusion: best-2 Ethio CTC + LLM editor.
 #
+# Baseline (text-only fusion, all counted clips):
 #   ./scripts/run_llm_fusion_smoke.sh
-#   MAX_SAMPLES=10 ./scripts/run_llm_fusion_smoke.sh --editor opus
-#   ./scripts/run_llm_fusion_smoke.sh --editor sonnet --max-samples 5
+#
+# Few-shot (8 gold examples, score held-out ~22):
+#   ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --no-resume \
+#     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
+#     --experiment-name llm_fusion_fs8
+#
+# Audio + hyps (use Gemini editor for multimodal):
+#   ./scripts/run_llm_fusion_smoke.sh --audio --editor gemini --no-resume \
+#     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
+#     --experiment-name llm_fusion_audio
+#
+# Few-shot + audio:
+#   ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --audio --editor gemini --no-resume \
+#     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
+#     --experiment-name llm_fusion_fs8_audio
 #
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,13 +26,13 @@ export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 EVAL_ROOT="${EVAL_ROOT:-/local/ndizi/4.Scripts/ndizi_eval}"
 CSV="${CSV:-${EVAL_ROOT}/data/manifest_cropconcept_oromo.csv}"
-# MAX_SAMPLES=all  or 0  → full manifest; default 10 for smoke
-MAX_SAMPLES="${MAX_SAMPLES:-10}"
+# MAX_SAMPLES=all  or empty  → full counted manifest
+MAX_SAMPLES="${MAX_SAMPLES:-}"
 EDITOR="${EDITOR:-opus}"
 
-if [[ "$MAX_SAMPLES" == "all" || "$MAX_SAMPLES" == "0" || "$MAX_SAMPLES" == "-1" ]]; then
+SAMPLE_ARGS=()
+if [[ -z "$MAX_SAMPLES" || "$MAX_SAMPLES" == "all" || "$MAX_SAMPLES" == "0" || "$MAX_SAMPLES" == "-1" ]]; then
   EXPERIMENT="${EXPERIMENT:-llm_fusion_full}"
-  SAMPLE_ARGS=()
 else
   EXPERIMENT="${EXPERIMENT:-llm_fusion_n${MAX_SAMPLES}}"
   SAMPLE_ARGS=(--max-samples "$MAX_SAMPLES")
