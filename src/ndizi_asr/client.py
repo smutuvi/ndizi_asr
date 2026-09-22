@@ -150,7 +150,41 @@ class OpenRouterASRClient:
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
+        return self._chat_completions(model=model, messages=messages)
 
+    def chat_with_audio(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        audio_b64: str,
+        audio_format: str = "wav",
+        system: Optional[str] = None,
+    ) -> TranscriptionResult:
+        """Multimodal chat: text prompt + input_audio (audio+hyp fusion)."""
+        messages: list[dict[str, Any]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "input_audio",
+                        "input_audio": {"data": audio_b64, "format": audio_format},
+                    },
+                ],
+            }
+        )
+        return self._chat_completions(model=model, messages=messages)
+
+    def _chat_completions(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, Any]],
+    ) -> TranscriptionResult:
         payload: dict[str, Any] = {
             "model": model,
             "temperature": self.config.temperature,
