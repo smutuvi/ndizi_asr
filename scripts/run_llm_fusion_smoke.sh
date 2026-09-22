@@ -12,9 +12,17 @@ export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 EVAL_ROOT="${EVAL_ROOT:-/local/ndizi/4.Scripts/ndizi_eval}"
 CSV="${CSV:-${EVAL_ROOT}/data/manifest_cropconcept_oromo.csv}"
+# MAX_SAMPLES=all  or 0  → full manifest; default 10 for smoke
 MAX_SAMPLES="${MAX_SAMPLES:-10}"
 EDITOR="${EDITOR:-opus}"
-EXPERIMENT="${EXPERIMENT:-llm_fusion_n${MAX_SAMPLES}}"
+
+if [[ "$MAX_SAMPLES" == "all" || "$MAX_SAMPLES" == "0" || "$MAX_SAMPLES" == "-1" ]]; then
+  EXPERIMENT="${EXPERIMENT:-llm_fusion_full}"
+  SAMPLE_ARGS=()
+else
+  EXPERIMENT="${EXPERIMENT:-llm_fusion_n${MAX_SAMPLES}}"
+  SAMPLE_ARGS=(--max-samples "$MAX_SAMPLES")
+fi
 
 python -m ndizi_asr.ensemble \
   --env-file .env \
@@ -24,7 +32,7 @@ python -m ndizi_asr.ensemble \
   --data-root "$EVAL_ROOT" \
   --languages om \
   --normalize ethio \
-  --max-samples "$MAX_SAMPLES" \
+  "${SAMPLE_ARGS[@]}" \
   --output-dir results \
   --experiment-name "$EXPERIMENT" \
   "$@"
