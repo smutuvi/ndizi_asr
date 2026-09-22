@@ -138,6 +138,76 @@ class OpenRouterASRClient:
             error=last_error or "unknown error",
         )
 
+    def chat_text(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        system: Optional[str] = None,
+    ) -> TranscriptionResult:
+        """Text-only chat completion (LLM fusion / post-edit)."""
+        messages: list[dict[str, Any]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        payload: dict[str, Any] = {
+            "model": model,
+            "temperature": self.config.temperature,
+            "max_tokens": self.config.max_tokens,
+            "messages": messages,
+        }
+        url = f"{self.config.base_url.rstrip('/')}/chat/completions"
+        last_error: Optional[str] = None
+        started = time.perf_counter()
+
+        for attempt in range(1, self.config.max_retries + 1):
+            try:
+                resp = self.session.post(
+                    url,
+                    json=payload,
+                    timeout=self.config.timeout_seconds,
+                )
+                if resp.status_code in {429, 500, 502, 503, 504}:
+                    last_error = f"HTTP {resp.status_code}: {resp.text[:300]}"
+                    sleep_for = self.config.retry_backoff_seconds * (2 ** (attempt - 1))
+                    logger.warning(
+                        "Retryable OpenRouter error (attempt %d/%d): %s; sleeping %.1fs",
+                        attempt,
+                        self.config.max_retries,
+                        last_error,
+                        sleep_for,
+                    )
+                    time.sleep(sleep_for)
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                text = self._extract_text(data)
+                return TranscriptionResult(
+                    text=text,
+                    latency_seconds=time.perf_counter() - started,
+                    model=model,
+                    raw_response=data,
+                )
+            except requests.RequestException as exc:
+                last_error = str(exc)
+                sleep_for = self.config.retry_backoff_seconds * (2 ** (attempt - 1))
+                logger.warning(
+                    "OpenRouter request failed (attempt %d/%d): %s; sleeping %.1fs",
+                    attempt,
+                    self.config.max_retries,
+                    last_error,
+                    sleep_for,
+                )
+                time.sleep(sleep_for)
+
+        return TranscriptionResult(
+            text="",
+            latency_seconds=time.perf_counter() - started,
+            model=model,
+            error=last_error or "unknown error",
+        )
+
     @staticmethod
     def _extract_text(data: dict[str, Any]) -> str:
         choices = data.get("choices") or []

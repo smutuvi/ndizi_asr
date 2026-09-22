@@ -1,0 +1,467 @@
+"""Smart fusion: combine top ASR hypotheses with an LLM editor (language knowledge).
+
+Pipeline per utterance:
+  1) Run N ASR backends (default: best two Ethio CTC models)
+  2) Ask an OpenRouter text LLM (e.g. Claude Opus) to reconcile hypotheses
+  3) Score each ASR system + the fused output (WER/CER)
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import logging
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+import yaml
+from dotenv import load_dotenv
+from tqdm import tqdm
+
+from .backends.ctc_hf import HuggingFaceCTCClient
+from .backends.omnilingual import OmnilingualASRClient
+from .backends.resolve import expand_model_groups, parse_model_spec
+from .backends.whisper_hf import HuggingFaceWhisperClient
+from .client import OpenRouterASRClient
+from .config import NormalizationConfig, OpenRouterConfig, load_run_config
+from .datasets import AudioSample, build_loader
+from .metrics import normalize_text, summarize_predictions
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_ASR_MODELS = (
+    "ethio-asr-multilingual-1b",
+    "ethio-asr-oromo",
+)
+
+EDITOR_ALIASES = {
+    "opus": "anthropic/claude-opus-4.5",
+    "opus-5": "anthropic/claude-opus-4.5",
+    "opus5": "anthropic/claude-opus-4.5",
+    "claude-opus": "anthropic/claude-opus-4.5",
+    "claude-opus-4.5": "anthropic/claude-opus-4.5",
+    "sonnet": "anthropic/claude-sonnet-4.5",
+    "gpt-4.1": "openai/gpt-4.1",
+    "gpt4.1": "openai/gpt-4.1",
+}
+
+FUSION_SYSTEM = (
+    "You are an expert ASR output editor for African languages. "
+    "You reconcile multiple automatic transcriptions into one accurate transcript. "
+    "Return ONLY the final transcript text — no quotes, labels, or commentary."
+)
+
+FUSION_USER_TEMPLATE = """Language: {language}
+Domain: Ethiopian CropConcept agronomy / hybrid wheat farmer speech (Oromo or Amharic).
+
+ASR hypotheses (may contain errors; use them as evidence, do not invent new content):
+{hyp_block}
+
+Instructions:
+- Prefer words/phrases supported by at least one hypothesis.
+- When hypotheses disagree, pick the reading that is more fluent and domain-plausible for CropConcept / wheat farming.
+- Preserve the original language and orthography (Afaan Oromo or Amharic); do not translate.
+- Fix obvious ASR gibberish and duplicated fragments.
+- If both hypotheses are empty, return an empty string.
+{glossary_block}
+Final transcript:"""
+
+
+def resolve_editor_model(name: str) -> str:
+    raw = name.strip()
+    return EDITOR_ALIASES.get(raw, EDITOR_ALIASES.get(raw.lower(), raw))
+
+
+def _slug(text: str) -> str:
+    return text.replace("/", "_").replace(" ", "_").replace(":", "_")
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _fmt_metric(value: Any) -> str:
+    if value is None:
+        return "—"
+    try:
+        return f"{float(value):.4f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _print_table(rows: list[dict[str, Any]]) -> None:
+    headers = ("System", "WER↓", "CER", "WER_raw", "CER_raw", "n", "err")
+    table = [
+        (
+            str(r["name"]),
+            _fmt_metric(r["wer_n"]),
+            _fmt_metric(r["cer_n"]),
+            _fmt_metric(r["wer"]),
+            _fmt_metric(r["cer"]),
+            str(r["n"] if r["n"] is not None else "—"),
+            str(r["errors"] if r["errors"] is not None else "—"),
+        )
+        for r in rows
+    ]
+    widths = [len(h) for h in headers]
+    for tr in table:
+        for i, cell in enumerate(tr):
+            widths[i] = max(widths[i], len(cell))
+
+    def fmt_row(cells: tuple[str, ...]) -> str:
+        return " | ".join(c.ljust(widths[i]) for i, c in enumerate(cells))
+
+    print("\n=== Smart fusion comparison ===")
+    print(fmt_row(headers))
+    print("-+-".join("-" * w for w in widths))
+    for tr in table:
+        print(fmt_row(tr))
+
+
+class _ASRPool:
+    def __init__(self, device: Optional[str] = None) -> None:
+        self.device = device
+        self._ctc: dict[str, HuggingFaceCTCClient] = {}
+        self._whisper: dict[str, HuggingFaceWhisperClient] = {}
+        self._omni: dict[str, OmnilingualASRClient] = {}
+
+    def transcribe(self, model_key: str, sample: AudioSample) -> tuple[str, Optional[str]]:
+        spec = parse_model_spec(model_key)
+        try:
+            if spec.backend == "hf_ctc":
+                if spec.model_id not in self._ctc:
+                    self._ctc[spec.model_id] = HuggingFaceCTCClient(
+                        spec.model_id, device=self.device
+                    )
+                result = self._ctc[spec.model_id].transcribe_array(
+                    sample.audio_array,
+                    sample.sampling_rate,
+                    language=sample.language,
+                    language_config=sample.language_config,
+                )
+            elif spec.backend == "hf_whisper":
+                if spec.model_id not in self._whisper:
+                    self._whisper[spec.model_id] = HuggingFaceWhisperClient(
+                        spec.model_id, device=self.device
+                    )
+                result = self._whisper[spec.model_id].transcribe_array(
+                    sample.audio_array,
+                    sample.sampling_rate,
+                    language=sample.language,
+                    language_config=sample.language_config,
+                )
+            elif spec.backend == "omnilingual":
+                if spec.model_id not in self._omni:
+                    self._omni[spec.model_id] = OmnilingualASRClient(spec.model_id)
+                result = self._omni[spec.model_id].transcribe_array(
+                    sample.audio_array,
+                    sample.sampling_rate,
+                    language=sample.language,
+                    language_config=sample.language_config,
+                )
+            else:
+                return "", f"ensemble ASR backends must be local (got {spec.backend})"
+            return result.text or "", result.error
+        except Exception as exc:  # noqa: BLE001
+            return "", str(exc)
+
+
+def _build_fusion_prompt(
+    *,
+    language: str,
+    hyps: dict[str, str],
+    glossary: Optional[str],
+) -> str:
+    lines = []
+    for i, (name, text) in enumerate(hyps.items(), start=1):
+        lines.append(f"{i}. [{name}]: {text or '(empty)'}")
+    glossary_block = ""
+    if glossary and glossary.strip():
+        glossary_block = (
+            "\nDomain glossary / preferred spellings (use when consistent with audio hypotheses):\n"
+            f"{glossary.strip()}\n"
+        )
+    return FUSION_USER_TEMPLATE.format(
+        language=language or "unknown",
+        hyp_block="\n".join(lines),
+        glossary_block=glossary_block,
+    )
+
+
+def run_fusion(
+    *,
+    asr_models: list[str],
+    editor_model: str,
+    dataset_cfg: Any,
+    normalization: NormalizationConfig,
+    openrouter: OpenRouterConfig,
+    api_key: str,
+    output_dir: Path,
+    device: Optional[str] = None,
+    glossary: Optional[str] = None,
+    resume: bool = True,
+) -> dict[str, Any]:
+    asr_models = expand_model_groups(asr_models)
+    editor_model = resolve_editor_model(editor_model)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fusion_name = f"fusion:{editor_model}"
+
+    pred_path = output_dir / "fusion_predictions.jsonl"
+    done: dict[str, dict[str, Any]] = {}
+    if resume and pred_path.exists():
+        with pred_path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                done[str(row.get("sample_id"))] = row
+        logger.info("Resuming fusion with %d existing rows", len(done))
+
+    pool = _ASRPool(device=device)
+    llm = OpenRouterASRClient(api_key=api_key, config=openrouter)
+    loader = build_loader(dataset_cfg)
+
+    # per-system prediction lists for scoring
+    by_system: dict[str, list[dict[str, Any]]] = {m: [] for m in asr_models}
+    by_system[fusion_name] = []
+
+    buffer: list[dict[str, Any]] = []
+
+    def flush() -> None:
+        nonlocal buffer
+        if not buffer:
+            return
+        with pred_path.open("a", encoding="utf-8") as f:
+            for row in buffer:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        buffer = []
+
+    for sample in tqdm(loader.iter_samples(), desc="fusion"):
+        if sample.sample_id in done:
+            row = done[sample.sample_id]
+        else:
+            hyps: dict[str, str] = {}
+            errors: dict[str, Optional[str]] = {}
+            for m in asr_models:
+                text, err = pool.transcribe(m, sample)
+                hyps[m] = text
+                errors[m] = err
+
+            prompt = _build_fusion_prompt(
+                language=sample.language or sample.language_config,
+                hyps=hyps,
+                glossary=glossary,
+            )
+            fused = llm.chat_text(
+                model=editor_model,
+                prompt=prompt,
+                system=FUSION_SYSTEM,
+            )
+            row = {
+                "sample_id": sample.sample_id,
+                "dataset_id": sample.dataset_id,
+                "language": sample.language,
+                "language_config": sample.language_config,
+                "reference": sample.reference,
+                "hypotheses": hyps,
+                "asr_errors": errors,
+                "fusion_model": editor_model,
+                "fusion": fused.text,
+                "fusion_error": fused.error,
+                "fusion_latency_seconds": fused.latency_seconds,
+            }
+            buffer.append(row)
+            if len(buffer) >= 5:
+                flush()
+
+        ref = str(row.get("reference") or "")
+        hyps = row.get("hypotheses") or {}
+        for m in asr_models:
+            pred = str(hyps.get(m) or "")
+            by_system[m].append(
+                {
+                    "reference": ref,
+                    "prediction": pred,
+                    "error": (row.get("asr_errors") or {}).get(m),
+                    "latency_seconds": None,
+                }
+            )
+        by_system[fusion_name].append(
+            {
+                "reference": ref,
+                "prediction": str(row.get("fusion") or ""),
+                "error": row.get("fusion_error"),
+                "latency_seconds": row.get("fusion_latency_seconds"),
+            }
+        )
+
+    flush()
+
+    table_rows: list[dict[str, Any]] = []
+    metrics_out: dict[str, Any] = {"created_at": _utc_now(), "editor": editor_model, "systems": {}}
+    for name, rows in by_system.items():
+        summary = summarize_predictions(rows, normalization)
+        metrics_out["systems"][name] = summary
+        table_rows.append(
+            {
+                "name": name,
+                "wer": summary.get("wer"),
+                "cer": summary.get("cer"),
+                "wer_n": summary.get("wer_normalized"),
+                "cer_n": summary.get("cer_normalized"),
+                "n": summary.get("num_scored"),
+                "errors": summary.get("num_errors"),
+            }
+        )
+
+    table_rows.sort(key=lambda r: (r["wer_n"] is None, float(r["wer_n"] or 0.0)))
+    _print_table(table_rows)
+
+    metrics_path = output_dir / "fusion_metrics.json"
+    metrics_path.write_text(json.dumps(metrics_out, indent=2, ensure_ascii=False), encoding="utf-8")
+    csv_path = output_dir / "fusion_summary.csv"
+    with csv_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["system", "wer_normalized", "cer_normalized", "wer", "cer", "num_scored", "num_errors"],
+        )
+        writer.writeheader()
+        for r in table_rows:
+            writer.writerow(
+                {
+                    "system": r["name"],
+                    "wer_normalized": r["wer_n"],
+                    "cer_normalized": r["cer_n"],
+                    "wer": r["wer"],
+                    "cer": r["cer"],
+                    "num_scored": r["n"],
+                    "num_errors": r["errors"],
+                }
+            )
+    logger.info("Wrote %s and %s", metrics_path, csv_path)
+    return metrics_out
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="ndizi-asr-fuse",
+        description=(
+            "Smart fusion: combine top ASR hypotheses with an LLM editor "
+            "(language knowledge / CropConcept post-edit)."
+        ),
+    )
+    p.add_argument("--config", type=Path, default=None, help="Optional YAML (dataset section used)")
+    p.add_argument(
+        "--asr-models",
+        nargs="+",
+        default=list(DEFAULT_ASR_MODELS),
+        help=f"Local ASR systems to fuse (default: {' '.join(DEFAULT_ASR_MODELS)})",
+    )
+    p.add_argument(
+        "--editor",
+        default="opus",
+        help="OpenRouter LLM editor id or alias (opus, opus-5, sonnet, gpt-4.1, …)",
+    )
+    p.add_argument("--csv", dest="csv_path", default=None)
+    p.add_argument("--data-root", default=None)
+    p.add_argument("--languages", "--language-filter", nargs="+", dest="language_filter", default=None)
+    p.add_argument("--max-samples", type=int, default=None)
+    p.add_argument("--normalize", choices=["default", "ethio", "none"], default="ethio")
+    p.add_argument("--glossary", type=Path, default=None, help="Optional text glossary for the editor")
+    p.add_argument("--device", default=None)
+    p.add_argument("--output-dir", default="results")
+    p.add_argument("--experiment-name", default=None)
+    p.add_argument("--resume", action="store_true", default=True)
+    p.add_argument("--no-resume", action="store_true", default=False)
+    p.add_argument("--env-file", type=Path, default=Path(".env"))
+    p.add_argument("-v", "--verbose", action="store_true")
+    return p
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+
+    if args.env_file.exists():
+        load_dotenv(args.env_file)
+    else:
+        load_dotenv()
+
+    raw: dict[str, Any]
+    if args.config and args.config.exists():
+        raw = yaml.safe_load(args.config.read_text(encoding="utf-8")) or {}
+    else:
+        raw = {
+            "experiment_name": "llm_fusion",
+            "dataset": {"type": "csv", "streaming": False},
+            "normalization": {"mode": "ethio"},
+        }
+
+    ds = dict(raw.get("dataset") or {})
+    if args.csv_path:
+        ds["type"] = "csv"
+        ds["csv_path"] = args.csv_path
+    if args.data_root:
+        ds["data_root"] = args.data_root
+    if args.language_filter:
+        ds["language_filter"] = list(args.language_filter)
+    if args.max_samples is not None:
+        ds["max_samples"] = args.max_samples
+    raw["dataset"] = ds
+    raw["normalization"] = {
+        **dict(raw.get("normalization") or {}),
+        "mode": args.normalize,
+    }
+    if args.experiment_name:
+        raw["experiment_name"] = args.experiment_name
+    if args.output_dir:
+        raw["output_dir"] = args.output_dir
+
+    cfg = load_run_config(raw)
+    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if not api_key:
+        logging.error("OPENROUTER_API_KEY required for the LLM editor")
+        return 2
+    if not cfg.dataset.csv_path and cfg.dataset.type not in {"cropconcept", "fleurs", "huggingface"}:
+        logging.error("Provide --csv or a dataset config")
+        return 2
+
+    glossary = None
+    if args.glossary and args.glossary.exists():
+        glossary = args.glossary.read_text(encoding="utf-8")
+
+    exp = cfg.experiment_name or "llm_fusion"
+    out = Path(cfg.output_dir) / exp
+    resume = False if args.no_resume else args.resume
+
+    print("Smart fusion = dual ASR hypotheses + LLM language editor")
+    print(f"  ASR:    {expand_model_groups(args.asr_models)}")
+    print(f"  Editor: {resolve_editor_model(args.editor)}")
+    print(f"  Out:    {out}")
+
+    run_fusion(
+        asr_models=list(args.asr_models),
+        editor_model=args.editor,
+        dataset_cfg=cfg.dataset,
+        normalization=cfg.normalization,
+        openrouter=cfg.openrouter,
+        api_key=api_key,
+        output_dir=out,
+        device=args.device,
+        glossary=glossary,
+        resume=resume,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
