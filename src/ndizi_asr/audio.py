@@ -18,13 +18,33 @@ _vad_model = None
 _vad_get_speech_timestamps = None
 
 
-def _load_via_ffmpeg(path: str, target_sr: int) -> Tuple[np.ndarray, int]:
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
-        raise RuntimeError(
-            f"Cannot decode {path!r}: ffmpeg not found on PATH "
-            "(needed for .m4a / compressed audio)."
-        )
+def _ffmpeg_candidates() -> list[str]:
+    """Prefer a working ffmpeg; conda builds often miss libx264 vs system ffmpeg."""
+    import os
+
+    out: list[str] = []
+    env_bin = os.environ.get("FFMPEG_BINARY", "").strip()
+    if env_bin:
+        out.append(env_bin)
+    which = shutil.which("ffmpeg")
+    if which:
+        out.append(which)
+    for fallback in ("/usr/bin/ffmpeg", "/bin/ffmpeg"):
+        if fallback not in out and Path(fallback).is_file():
+            out.append(fallback)
+    # Dedupe preserving order
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for p in out:
+        if p not in seen:
+            seen.add(p)
+            uniq.append(p)
+    return uniq
+
+
+def _run_ffmpeg_decode(ffmpeg: str, path: str, target_sr: int, *, clean_libs: bool) -> subprocess.CompletedProcess:
+    import os
+
     cmd = [
         ffmpeg,
         "-v",
@@ -41,14 +61,53 @@ def _load_via_ffmpeg(path: str, target_sr: int) -> Tuple[np.ndarray, int]:
         str(target_sr),
         "pipe:1",
     ]
-    proc = subprocess.run(cmd, capture_output=True, check=False)
-    if proc.returncode != 0:
-        err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
-        raise RuntimeError(f"ffmpeg failed for {path!r}: {err or proc.returncode}")
-    if not proc.stdout:
-        raise RuntimeError(f"ffmpeg returned empty audio for {path!r}")
-    wav = np.frombuffer(proc.stdout, dtype=np.float32).copy()
-    return wav, target_sr
+    env = None
+    if clean_libs:
+        # Avoid conda LD_LIBRARY_PATH breaking system /usr/bin/ffmpeg (libx264 etc.)
+        env = os.environ.copy()
+        env.pop("LD_LIBRARY_PATH", None)
+        env.pop("DYLD_LIBRARY_PATH", None)
+    return subprocess.run(cmd, capture_output=True, check=False, env=env)
+
+
+def _load_via_ffmpeg(path: str, target_sr: int) -> Tuple[np.ndarray, int]:
+    candidates = _ffmpeg_candidates()
+    if not candidates:
+        raise RuntimeError(
+            f"Cannot decode {path!r}: ffmpeg not found on PATH "
+            "(needed for .m4a / compressed audio). "
+            "Install ffmpeg or set FFMPEG_BINARY=/usr/bin/ffmpeg."
+        )
+
+    errors: list[str] = []
+    for i, ffmpeg in enumerate(candidates):
+        # First try as-is; if that looks like a shared-lib breakage, retry with clean env
+        attempts = [(False, "env"), (True, "clean-libs")]
+        # For non-conda absolute system paths, prefer clean libs first
+        if ffmpeg.startswith("/usr/") or ffmpeg.startswith("/bin/"):
+            attempts = [(True, "clean-libs"), (False, "env")]
+
+        for clean_libs, label in attempts:
+            proc = _run_ffmpeg_decode(ffmpeg, path, target_sr, clean_libs=clean_libs)
+            if proc.returncode == 0 and proc.stdout:
+                if i > 0 or clean_libs:
+                    logger.info(
+                        "Decoded %s with ffmpeg=%s (%s)", path, ffmpeg, label
+                    )
+                wav = np.frombuffer(proc.stdout, dtype=np.float32).copy()
+                return wav, target_sr
+            err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+            errors.append(f"{ffmpeg} [{label}]: {err or proc.returncode}")
+            # Shared-library failures → try next attempt/candidate
+            if "error while loading shared libraries" in err or "cannot open shared object" in err:
+                continue
+            # Other decode errors (bad file) — still try other binaries once
+            break
+
+    raise RuntimeError(
+        f"ffmpeg failed for {path!r}. Tried: " + " | ".join(errors)
+        + ". Tip: export FFMPEG_BINARY=/usr/bin/ffmpeg"
+    )
 
 
 def _load_via_soundfile(path: str, target_sr: int) -> Tuple[np.ndarray, int]:
