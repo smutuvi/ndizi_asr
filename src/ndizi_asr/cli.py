@@ -385,26 +385,97 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     runner = BenchmarkRunner(config, api_key=api_key)
     summary = runner.run()
-
-    print("\n=== Benchmark summary ===")
-    for model, metrics in summary.get("models", {}).items():
-        overall = metrics.get("overall") or {}
-        print(
-            f"{model}: WER={overall.get('wer_normalized')} "
-            f"CER={overall.get('cer_normalized')} "
-            f"scored={overall.get('num_scored')} errors={overall.get('num_errors')}"
-        )
-        for ds_id, dm in (metrics.get("per_dataset") or {}).items():
-            print(
-                f"  [dataset] {ds_id}: WER={dm.get('wer_normalized')} "
-                f"CER={dm.get('cer_normalized')} n={dm.get('num_scored')}"
-            )
-        for lang, lm in (metrics.get("per_language") or {}).items():
-            print(
-                f"  - {lang}: WER={lm.get('wer_normalized')} CER={lm.get('cer_normalized')} "
-                f"n={lm.get('num_scored')}"
-            )
+    _print_comparison_table(summary)
     return 0
+
+
+def _fmt_metric(value: Any) -> str:
+    if value is None:
+        return "—"
+    try:
+        return f"{float(value):.4f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _print_comparison_table(summary: dict[str, Any]) -> None:
+    """Print a markdown-style model comparison table (WER/CER)."""
+    rows: list[dict[str, Any]] = []
+    for model, metrics in (summary.get("models") or {}).items():
+        overall = metrics.get("overall") or {}
+        rows.append(
+            {
+                "model": model,
+                "backend": metrics.get("backend") or "",
+                "wer": overall.get("wer"),
+                "cer": overall.get("cer"),
+                "wer_n": overall.get("wer_normalized"),
+                "cer_n": overall.get("cer_normalized"),
+                "n": overall.get("num_scored"),
+                "errors": overall.get("num_errors"),
+            }
+        )
+
+    def sort_key(r: dict[str, Any]):
+        w = r.get("wer_n")
+        return (w is None, float(w) if w is not None else 0.0)
+
+    rows.sort(key=sort_key)
+
+    print("\n=== Model comparison (overall) ===")
+    if not rows:
+        print("(no models scored)")
+        return
+
+    headers = ("Model", "Backend", "WER↓", "CER", "WER_raw", "CER_raw", "n", "err")
+    table_rows = [
+        (
+            str(r["model"]),
+            str(r["backend"]),
+            _fmt_metric(r["wer_n"]),
+            _fmt_metric(r["cer_n"]),
+            _fmt_metric(r["wer"]),
+            _fmt_metric(r["cer"]),
+            str(r["n"] if r["n"] is not None else "—"),
+            str(r["errors"] if r["errors"] is not None else "—"),
+        )
+        for r in rows
+    ]
+    widths = [len(h) for h in headers]
+    for tr in table_rows:
+        for i, cell in enumerate(tr):
+            widths[i] = max(widths[i], len(cell))
+
+    def fmt_row(cells: tuple[str, ...]) -> str:
+        return " | ".join(c.ljust(widths[i]) for i, c in enumerate(cells))
+
+    print(fmt_row(headers))
+    print("-+-".join("-" * w for w in widths))
+    for tr in table_rows:
+        print(fmt_row(tr))
+
+    # Per-language breakdown when more than one language was scored
+    lang_keys: set[str] = set()
+    for metrics in (summary.get("models") or {}).values():
+        lang_keys.update((metrics.get("per_language") or {}).keys())
+    if len(lang_keys) > 1:
+        print("\n=== Per-language (normalized WER / CER) ===")
+        for lang in sorted(lang_keys):
+            print(f"\n[{lang}]")
+            for r in rows:
+                metrics = (summary.get("models") or {}).get(r["model"]) or {}
+                lm = (metrics.get("per_language") or {}).get(lang) or {}
+                print(
+                    f"  {r['model']}: WER={_fmt_metric(lm.get('wer_normalized'))} "
+                    f"CER={_fmt_metric(lm.get('cer_normalized'))} "
+                    f"n={lm.get('num_scored')}"
+                )
+
+    out = summary.get("experiment_name")
+    print(
+        f"\nFull metrics: results/<experiment>/summary.csv "
+        f"(experiment={out or 'see --experiment-name'})"
+    )
 
 
 if __name__ == "__main__":
