@@ -6,7 +6,6 @@
 #   ./scripts/run_cropconcept_compare.sh \
 #     --models \
 #       gemini-2.5-flash \
-#       omnilingualasr \
 #       omnilingualasr-ctc \
 #       ethio-asr-oromo \
 #       ethio-asr-multilingual-1b \
@@ -34,7 +33,6 @@ EXPERIMENT="${EXPERIMENT:-cropconcept_oromo_n${MAX_SAMPLES}}"
 
 DEFAULT_MODELS=(
   gemini-2.5-flash
-  omnilingualasr
   omnilingualasr-ctc
   ethio-asr-oromo
   ethio-asr-multilingual-1b

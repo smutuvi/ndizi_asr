@@ -58,7 +58,6 @@ MODEL_GROUPS: dict[str, list[str]] = {
     ],
     "oromo": [
         "gemini-2.5-flash",
-        "omnilingualasr",
         "omnilingualasr-ctc",
         "ethio-asr-oromo",
         "ethio-asr-multilingual-1b",
@@ -68,7 +67,7 @@ MODEL_GROUPS: dict[str, list[str]] = {
     "w2v-bert-family": ["ethio-asr-amharic", "ethio-asr-oromo"],
     "whisper-family": ["whisper", "sunbird-whisper-salt", "sunbird-whisper-51"],
     "local-ethio": [
-        "omnilingualasr",
+        "omnilingualasr-ctc",
         "ethio-asr-amharic",
         "ethio-asr-oromo",
         "whisper",
