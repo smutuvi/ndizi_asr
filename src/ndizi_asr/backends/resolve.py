@@ -31,6 +31,10 @@ MODEL_ALIASES: dict[str, str] = {
     "sunflower-gemma4-e2b": "Sunbird/Sunflower-Gemma4-E2B",
     # Ethiopia / CropConcept short keys (from ndizi_eval)
     "gemini-2.5-flash": "google/gemini-2.5-flash",
+    "gemini-3.5-flash": "google/gemini-3.5-flash",
+    "gemini-3.6-flash": "google/gemini-3.6-flash",
+    "gemini-3.8-flash": "google/gemini-3.8-flash",
+    "gemini-3-flash": "google/gemini-3.5-flash",
     "whisper": "openai/whisper-large-v3",
     "whisper-large-v3": "openai/whisper-large-v3",
     "ethio-asr-amharic": "badrex/Ethio-ASR-amharic",

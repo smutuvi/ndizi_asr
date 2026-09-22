@@ -19,20 +19,20 @@ _vad_get_speech_timestamps = None
 
 
 def _ffmpeg_candidates() -> list[str]:
-    """Prefer a working ffmpeg; conda builds often miss libx264 vs system ffmpeg."""
+    """Prefer system ffmpeg; conda builds often break (libx264 / LD_LIBRARY_PATH)."""
     import os
 
     out: list[str] = []
     env_bin = os.environ.get("FFMPEG_BINARY", "").strip()
     if env_bin:
         out.append(env_bin)
+    # Prefer system binaries before conda-shadowed PATH ffmpeg
+    for fallback in ("/usr/bin/ffmpeg", "/bin/ffmpeg"):
+        if Path(fallback).is_file():
+            out.append(fallback)
     which = shutil.which("ffmpeg")
     if which:
         out.append(which)
-    for fallback in ("/usr/bin/ffmpeg", "/bin/ffmpeg"):
-        if fallback not in out and Path(fallback).is_file():
-            out.append(fallback)
-    # Dedupe preserving order
     seen: set[str] = set()
     uniq: list[str] = []
     for p in out:
@@ -42,35 +42,22 @@ def _ffmpeg_candidates() -> list[str]:
     return uniq
 
 
-def _run_ffmpeg_decode(ffmpeg: str, path: str, target_sr: int, *, clean_libs: bool) -> subprocess.CompletedProcess:
+def _ffmpeg_env(*, clean_libs: bool) -> Optional[dict]:
     import os
 
-    cmd = [
-        ffmpeg,
-        "-v",
-        "error",
-        "-i",
-        path,
-        "-f",
-        "f32le",
-        "-acodec",
-        "pcm_f32le",
-        "-ac",
-        "1",
-        "-ar",
-        str(target_sr),
-        "pipe:1",
-    ]
-    env = None
-    if clean_libs:
-        # Avoid conda LD_LIBRARY_PATH breaking system /usr/bin/ffmpeg (libx264 etc.)
-        env = os.environ.copy()
-        env.pop("LD_LIBRARY_PATH", None)
-        env.pop("DYLD_LIBRARY_PATH", None)
-    return subprocess.run(cmd, capture_output=True, check=False, env=env)
+    if not clean_libs:
+        return None
+    env = os.environ.copy()
+    env.pop("LD_LIBRARY_PATH", None)
+    env.pop("DYLD_LIBRARY_PATH", None)
+    return env
 
 
 def _load_via_ffmpeg(path: str, target_sr: int) -> Tuple[np.ndarray, int]:
+    """Decode compressed audio via ffmpeg → temp WAV → soundfile (avoids pipe heap issues)."""
+    import os
+    import tempfile
+
     candidates = _ffmpeg_candidates()
     if not candidates:
         raise RuntimeError(
@@ -80,33 +67,58 @@ def _load_via_ffmpeg(path: str, target_sr: int) -> Tuple[np.ndarray, int]:
         )
 
     errors: list[str] = []
-    for i, ffmpeg in enumerate(candidates):
-        # First try as-is; if that looks like a shared-lib breakage, retry with clean env
-        attempts = [(False, "env"), (True, "clean-libs")]
-        # For non-conda absolute system paths, prefer clean libs first
-        if ffmpeg.startswith("/usr/") or ffmpeg.startswith("/bin/"):
-            attempts = [(True, "clean-libs"), (False, "env")]
+    for ffmpeg in candidates:
+        # System ffmpeg: always clean conda libs. Conda ffmpeg: try clean then env.
+        is_system = ffmpeg.startswith("/usr/") or ffmpeg.startswith("/bin/")
+        attempt_flags = (True,) if is_system else (True, False)
 
-        for clean_libs, label in attempts:
-            proc = _run_ffmpeg_decode(ffmpeg, path, target_sr, clean_libs=clean_libs)
-            if proc.returncode == 0 and proc.stdout:
-                if i > 0 or clean_libs:
-                    logger.info(
-                        "Decoded %s with ffmpeg=%s (%s)", path, ffmpeg, label
-                    )
-                wav = np.frombuffer(proc.stdout, dtype=np.float32).copy()
-                return wav, target_sr
-            err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
-            errors.append(f"{ffmpeg} [{label}]: {err or proc.returncode}")
-            # Shared-library failures → try next attempt/candidate
-            if "error while loading shared libraries" in err or "cannot open shared object" in err:
-                continue
-            # Other decode errors (bad file) — still try other binaries once
-            break
+        for clean_libs in attempt_flags:
+            label = "clean-libs" if clean_libs else "env"
+            tmp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                    tmp_path = tmp.name
+                cmd = [
+                    ffmpeg,
+                    "-y",
+                    "-v",
+                    "error",
+                    "-i",
+                    path,
+                    "-ac",
+                    "1",
+                    "-ar",
+                    str(target_sr),
+                    "-f",
+                    "wav",
+                    tmp_path,
+                ]
+                proc = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    check=False,
+                    env=_ffmpeg_env(clean_libs=clean_libs),
+                )
+                if proc.returncode != 0 or not Path(tmp_path).is_file() or Path(tmp_path).stat().st_size == 0:
+                    err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+                    errors.append(f"{ffmpeg} [{label}]: {err or proc.returncode}")
+                    continue
+                wav, sr = _load_via_soundfile(tmp_path, target_sr)
+                logger.info("Decoded %s via ffmpeg=%s (%s)", path, ffmpeg, label)
+                return wav, sr
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{ffmpeg} [{label}]: {exc}")
+            finally:
+                if tmp_path:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
 
     raise RuntimeError(
-        f"ffmpeg failed for {path!r}. Tried: " + " | ".join(errors)
-        + ". Tip: export FFMPEG_BINARY=/usr/bin/ffmpeg"
+        f"ffmpeg failed for {path!r}. Tried: "
+        + " | ".join(errors)
+        + ". Tip: conda deactivate (use ndizi env) and export FFMPEG_BINARY=/usr/bin/ffmpeg"
     )
 
 
