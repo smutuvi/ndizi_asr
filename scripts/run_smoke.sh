@@ -10,7 +10,7 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-python -m gemini_asr_bench.cli \
+python -m ndizi_asr.cli \
   --config configs/fleurs_afro.yaml \
   --env-file .env \
   --model google/gemini-2.5-flash google/gemini-3.5-flash google/gemini-3.6-flash \

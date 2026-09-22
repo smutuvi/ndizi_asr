@@ -12,7 +12,7 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-python -m gemini_asr_bench.cli \
+python -m ndizi_asr.cli \
   --config configs/horn_asr_gemini25.yaml \
   --env-file .env \
   "$@"

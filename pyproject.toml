@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gemini-asr-bench"
-version = "0.1.0"
-description = "Benchmark Gemini ASR models via OpenRouter on Hugging Face speech datasets"
+name = "ndizi-asr"
+version = "0.2.0"
+description = "Ndizi ASR — one-stop train and evaluate for African speech recognition"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -28,13 +28,40 @@ local = [
   "torch>=2.1.0",
   "transformers>=4.40.0",
   "accelerate>=0.27.0",
+  "torchaudio>=2.1.0",
+  "silero-vad>=5.1",
+  "librosa>=0.10.0",
+]
+omnilingual = [
+  "omnilingual-asr[data]",
+]
+train = [
+  "torch>=2.1.0",
+  "transformers>=4.40.0",
+  "accelerate>=0.27.0",
+  "datasets>=2.19.0",
+  "evaluate>=0.4.1",
+]
+all = [
+  "torch>=2.1.0",
+  "transformers>=4.40.0",
+  "accelerate>=0.27.0",
+  "torchaudio>=2.1.0",
+  "silero-vad>=5.1",
+  "librosa>=0.10.0",
+  "omnilingual-asr[data]",
+  "evaluate>=0.4.1",
+  "pytest>=8.0.0",
 ]
 
 [project.scripts]
-gemini-asr-bench = "gemini_asr_bench.cli:main"
+ndizi-asr = "ndizi_asr.cli:main"
+ndizi-asr-train = "ndizi_asr.train:main"
+# Back-compat
+gemini-asr-bench = "ndizi_asr.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-gemini_asr_bench = ["py.typed"]
+ndizi_asr = ["py.typed"]

@@ -11,15 +11,22 @@ from typing import Any, Optional
 
 from tqdm import tqdm
 
-from .backends.resolve import parse_model_spec
+from .audio import join_chunk_transcripts, maybe_chunk
+from .backends.ctc_hf import HuggingFaceCTCClient
 from .backends.gemma_hf import HuggingFaceGemmaASRClient
+from .backends.omnilingual import OmnilingualASRClient
+from .backends.resolve import expand_model_groups, parse_model_spec
+from .backends.types import TranscriptionResult
 from .backends.whisper_hf import HuggingFaceWhisperClient
 from .client import OpenRouterASRClient, audio_array_to_wav_base64
 from .config import RunConfig
 from .datasets import AudioSample, build_loader
+from .datasets.csv_manifest import normalize_lang
 from .metrics import normalize_text, summarize_predictions
 
 logger = logging.getLogger(__name__)
+
+_LOCAL_BACKENDS = frozenset({"hf_whisper", "hf_gemma", "hf_ctc", "omnilingual"})
 
 
 def _slug(text: str) -> str:
@@ -30,6 +37,16 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
+def _lang_matches_filter(sample: AudioSample, language_filter: Optional[str]) -> bool:
+    if not language_filter:
+        return True
+    want = normalize_lang(language_filter)
+    for candidate in (sample.language_config, sample.language):
+        if candidate and normalize_lang(str(candidate)) == want:
+            return True
+    return False
+
+
 class BenchmarkRunner:
     def __init__(self, config: RunConfig, api_key: Optional[str] = None) -> None:
         self.config = config
@@ -37,6 +54,8 @@ class BenchmarkRunner:
         self.openrouter_client: Optional[OpenRouterASRClient] = None
         self._whisper_clients: dict[str, HuggingFaceWhisperClient] = {}
         self._gemma_clients: dict[str, HuggingFaceGemmaASRClient] = {}
+        self._ctc_clients: dict[str, HuggingFaceCTCClient] = {}
+        self._omni_clients: dict[str, OmnilingualASRClient] = {}
         self.output_root = Path(config.output_dir) / config.experiment_name
         self.output_root.mkdir(parents=True, exist_ok=True)
 
@@ -71,12 +90,69 @@ class BenchmarkRunner:
             )
         return self._gemma_clients[model_id]
 
+    def _get_ctc(self, model_id: str) -> HuggingFaceCTCClient:
+        if model_id not in self._ctc_clients:
+            lw = self.config.local_whisper
+            self._ctc_clients[model_id] = HuggingFaceCTCClient(
+                model_id,
+                device=lw.device,
+            )
+        return self._ctc_clients[model_id]
+
+    def _get_omnilingual(self, model_id: str) -> OmnilingualASRClient:
+        card = self.config.local_whisper.omni_card or model_id
+        if card not in self._omni_clients:
+            lw = self.config.local_whisper
+            self._omni_clients[card] = OmnilingualASRClient(
+                card,
+                omnilingual_root=lw.omnilingual_root,
+            )
+        return self._omni_clients[card]
+
+    def _transcribe_openrouter_chunked(
+        self,
+        *,
+        model_id: str,
+        array,
+        sampling_rate: int,
+        language: Optional[str],
+    ) -> TranscriptionResult:
+        chunks, _ = maybe_chunk(array, sampling_rate, 30.0)
+        client = self._get_openrouter()
+        parts: list[str] = []
+        total_latency = 0.0
+        last_error: Optional[str] = None
+        for chunk in chunks:
+            audio_b64, fmt = audio_array_to_wav_base64(chunk, sampling_rate)
+            result = client.transcribe(
+                model=model_id,
+                audio_b64=audio_b64,
+                audio_format=fmt,
+                prompt=self.config.prompt,
+                language=language,
+            )
+            total_latency += float(result.latency_seconds or 0.0)
+            if result.error:
+                last_error = result.error
+            else:
+                parts.append(result.text)
+        return TranscriptionResult(
+            text=join_chunk_transcripts(parts),
+            latency_seconds=total_latency,
+            model=model_id,
+            error=last_error if not parts else None,
+        )
+
     def run(self, models: Optional[list[str]] = None) -> dict[str, Any]:
-        models = models or self.config.models
+        models = expand_model_groups(models or self.config.models)
         if not models:
             raise ValueError("No models specified. Pass --model or set models in config.")
 
-        if self.config.dataset.streaming:
+        if self.config.dataset.streaming and self.config.dataset.type not in {
+            "csv",
+            "manifest",
+            "cropconcept",
+        }:
             logger.info("Streaming dataset samples (no bulk preload)")
         else:
             logger.info("Iterating dataset samples on demand")
@@ -98,9 +174,11 @@ class BenchmarkRunner:
         logger.info("Wrote summary to %s", summary_path)
         return summary
 
-    def _iter_pending_samples(self, done_ids: set[str]):
+    def _iter_pending_samples(self, done_ids: set[str], language_filter: Optional[str]):
         loader = build_loader(self.config.dataset)
         for sample in loader.iter_samples():
+            if not _lang_matches_filter(sample, language_filter):
+                continue
             if sample.sample_id not in done_ids:
                 yield sample
 
@@ -124,19 +202,23 @@ class BenchmarkRunner:
                     done_ids.add(str(row.get("sample_id")))
             logger.info("Resuming %s with %d existing predictions", model, len(done_ids))
 
-        pending = self._iter_pending_samples(done_ids)
+        pending = self._iter_pending_samples(done_ids, spec.language_filter)
         logger.info(
-            "Model %s [%s]: streaming pending samples (skipping %d already done)",
+            "Model %s [%s]: streaming pending samples (skipping %d already done)%s",
             spec.model_id,
             spec.backend,
             len(done_ids),
+            f" lang_filter={spec.language_filter}" if spec.language_filter else "",
         )
 
-        # Fail fast (and avoid concurrent model downloads) for local models.
         if spec.backend == "hf_whisper":
             self._get_whisper(spec.model_id)
         elif spec.backend == "hf_gemma":
             self._get_gemma(spec.model_id)
+        elif spec.backend == "hf_ctc":
+            self._get_ctc(spec.model_id)
+        elif spec.backend == "omnilingual":
+            self._get_omnilingual(spec.model_id)
 
         buffer: list[dict[str, Any]] = []
 
@@ -150,32 +232,41 @@ class BenchmarkRunner:
             buffer = []
 
         def process_one(sample: AudioSample) -> dict[str, Any]:
+            lang_for_norm = sample.language_config or sample.language
             if spec.backend == "hf_whisper":
-                client = self._get_whisper(spec.model_id)
-                result = client.transcribe_array(
+                result = self._get_whisper(spec.model_id).transcribe_array(
                     sample.audio_array,
                     sample.sampling_rate,
                     language=sample.language,
                     language_config=sample.language_config,
                 )
             elif spec.backend == "hf_gemma":
-                client = self._get_gemma(spec.model_id)
-                result = client.transcribe_array(
+                result = self._get_gemma(spec.model_id).transcribe_array(
                     sample.audio_array,
                     sample.sampling_rate,
                     language=sample.language,
                     language_config=sample.language_config,
                     prompt=self.config.prompt,
                 )
-            else:
-                audio_b64, fmt = audio_array_to_wav_base64(
-                    sample.audio_array, sample.sampling_rate
+            elif spec.backend == "hf_ctc":
+                result = self._get_ctc(spec.model_id).transcribe_array(
+                    sample.audio_array,
+                    sample.sampling_rate,
+                    language=sample.language,
+                    language_config=sample.language_config,
                 )
-                result = self._get_openrouter().transcribe(
-                    model=spec.model_id,
-                    audio_b64=audio_b64,
-                    audio_format=fmt,
-                    prompt=self.config.prompt,
+            elif spec.backend == "omnilingual":
+                result = self._get_omnilingual(spec.model_id).transcribe_array(
+                    sample.audio_array,
+                    sample.sampling_rate,
+                    language=sample.language,
+                    language_config=sample.language_config,
+                )
+            else:
+                result = self._transcribe_openrouter_chunked(
+                    model_id=spec.model_id,
+                    array=sample.audio_array,
+                    sampling_rate=sample.sampling_rate,
                     language=sample.language,
                 )
             pred = result.text
@@ -186,8 +277,12 @@ class BenchmarkRunner:
                 "language_config": sample.language_config,
                 "reference": sample.reference,
                 "prediction": pred,
-                "reference_normalized": normalize_text(sample.reference, self.config.normalization),
-                "prediction_normalized": normalize_text(pred, self.config.normalization),
+                "reference_normalized": normalize_text(
+                    sample.reference, self.config.normalization, language=lang_for_norm
+                ),
+                "prediction_normalized": normalize_text(
+                    pred, self.config.normalization, language=lang_for_norm
+                ),
                 "latency_seconds": result.latency_seconds,
                 "model": spec.raw,
                 "backend": spec.backend,
@@ -196,7 +291,7 @@ class BenchmarkRunner:
 
         workers = (
             self.config.local_whisper.concurrency
-            if spec.backend in {"hf_whisper", "hf_gemma"}
+            if spec.backend in _LOCAL_BACKENDS
             else self.config.concurrency
         )
         self._process_pending_samples(

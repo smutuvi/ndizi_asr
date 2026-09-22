@@ -1,0 +1,41 @@
+# Hub Amharic + Oromo eval with Ethio CTC + Gemini + Sunbird (ndizi_eval parity).
+experiment_name: ethio_hub_n100
+models:
+  - gemini-2.5-flash
+  - ethio
+  - sunbird-whisper-51
+dataset:
+  type: huggingface
+  sources:
+    - dataset_id: google/fleurs
+      config_name: am_et
+      split: test
+      language: amharic
+      text_column: transcription
+      max_samples: 100
+    - dataset_id: google/fleurs
+      config_name: om_et
+      split: test
+      language: oromo
+      text_column: transcription
+      max_samples: 100
+    - dataset_id: google/WaxalNLP
+      config_name: amh_asr
+      split: test
+      language: amharic
+      text_column: text
+      max_samples: 100
+    - dataset_id: google/WaxalNLP
+      config_name: orm_asr
+      split: test
+      language: oromo
+      text_column: text
+      max_samples: 100
+  streaming: true
+normalization:
+  mode: ethio
+local_whisper:
+  concurrency: 1
+concurrency: 2
+output_dir: results
+resume: true

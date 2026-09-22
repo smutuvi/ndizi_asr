@@ -13,7 +13,7 @@ fi
 
 MAX_SAMPLES="${MAX_SAMPLES:-100}"
 
-python -m gemini_asr_bench.cli \
+python -m ndizi_asr.cli \
   --env-file .env \
   --model google/gemini-2.5-flash \
          google/gemini-3.1-flash-lite \

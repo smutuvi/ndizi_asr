@@ -2,18 +2,30 @@ from __future__ import annotations
 
 import re
 import string
-from typing import Iterable
+from typing import Iterable, Optional
 
 from jiwer import cer as jiwer_cer
 from jiwer import wer as jiwer_wer
 
 from .config import NormalizationConfig
+from .ethio_normalize import clean_ethio_transcription
 
 
 _PUNCT_TABLE = str.maketrans("", "", string.punctuation + "።፣፤፥፦፧፨።،؛؟«»\"'„“”‘’…–—")
 
 
-def normalize_text(text: str, cfg: NormalizationConfig) -> str:
+def normalize_text(
+    text: str,
+    cfg: NormalizationConfig,
+    *,
+    language: Optional[str] = None,
+) -> str:
+    mode = (cfg.mode or "default").lower()
+    if mode in {"none", "raw", "off"}:
+        return text or ""
+    if mode in {"ethio", "ethiopia", "geez"}:
+        return clean_ethio_transcription(text, language=language)
+
     out = text or ""
     if cfg.lowercase:
         out = out.lower()
@@ -62,8 +74,22 @@ def summarize_predictions(
 
     refs = [str(r.get("reference") or "") for r in ok]
     hyps = [str(r.get("prediction") or "") for r in ok]
-    refs_n = [normalize_text(x, normalization) for x in refs]
-    hyps_n = [normalize_text(x, normalization) for x in hyps]
+    refs_n = [
+        normalize_text(
+            x,
+            normalization,
+            language=str(r.get("language") or r.get("language_config") or ""),
+        )
+        for x, r in zip(refs, ok)
+    ]
+    hyps_n = [
+        normalize_text(
+            x,
+            normalization,
+            language=str(r.get("language") or r.get("language_config") or ""),
+        )
+        for x, r in zip(hyps, ok)
+    ]
     latencies = [float(r["latency_seconds"]) for r in ok if r.get("latency_seconds") is not None]
 
     return {

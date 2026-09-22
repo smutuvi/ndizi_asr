@@ -11,7 +11,7 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-python -m gemini_asr_bench.cli \
+python -m ndizi_asr.cli \
   --config configs/gemini31_afro.yaml \
   --env-file .env \
   "$@"

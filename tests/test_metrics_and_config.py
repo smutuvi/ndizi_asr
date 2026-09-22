@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from gemini_asr_bench.backends.resolve import (
+from ndizi_asr.backends.resolve import (
     canonicalize_model_id,
+    expand_model_groups,
     needs_hf_auth,
+    needs_omnilingual,
     needs_openrouter,
     parse_model_spec,
 )
-from gemini_asr_bench.backends.sunbird_langs import resolve_sunbird_language_code
-from gemini_asr_bench.config import NormalizationConfig, load_run_config
-from gemini_asr_bench.datasets.presets import expand_dataset_flags
-from gemini_asr_bench.metrics import normalize_text, summarize_predictions
+from ndizi_asr.backends.sunbird_langs import resolve_sunbird_language_code
+from ndizi_asr.config import NormalizationConfig, load_run_config
+from ndizi_asr.datasets.presets import expand_dataset_flags
+from ndizi_asr.ethio_normalize import clean_ethio_transcription
+from ndizi_asr.metrics import normalize_text, summarize_predictions
 
 
 def test_load_run_config_defaults():
@@ -26,11 +29,21 @@ def test_load_run_config_defaults():
     assert cfg.dataset.type == "fleurs"
     assert cfg.dataset.languages["swahili"] == "sw_ke"
     assert cfg.local_whisper.concurrency == 1
+    assert cfg.normalization.mode == "default"
 
 
 def test_normalize_text():
     cfg = NormalizationConfig(lowercase=True, strip_punctuation=True, collapse_whitespace=True)
     assert normalize_text("  Habari, Dunia!  ", cfg) == "habari dunia"
+
+
+def test_normalize_ethio_mode():
+    cfg = NormalizationConfig(mode="ethio")
+    out = normalize_text("ሀገር!", cfg, language="am")
+    assert "!" not in out
+    assert clean_ethio_transcription("ሐገር", language="am") == clean_ethio_transcription(
+        "ሃገር", language="am"
+    )
 
 
 def test_summarize_predictions():
@@ -55,6 +68,25 @@ def test_parse_model_spec_backends():
     assert needs_openrouter(["sunbird/gemma-4-e2b"]) is False
     assert needs_hf_auth(["google/gemma-4-e2b", "Sunbird/asr-whisper-51-african-languages"]) is True
     assert canonicalize_model_id("gemma-4-e2b") == "google/gemma-4-E2B-it"
+
+
+def test_parse_ethio_and_omnilingual():
+    ctc = parse_model_spec("ethio-asr-oromo")
+    assert ctc.backend == "hf_ctc"
+    assert ctc.model_id == "badrex/Ethio-ASR-oromo"
+    assert ctc.language_filter == "om"
+    am = parse_model_spec("ethio-asr-amharic")
+    assert am.language_filter == "am"
+    omni = parse_model_spec("omnilingualasr")
+    assert omni.backend == "omnilingual"
+    assert omni.model_id == "omniASR_LLM_7B"
+    assert parse_model_spec("ctc:org/custom-ctc").backend == "hf_ctc"
+    assert needs_omnilingual(["omnilingualasr"]) is True
+    assert expand_model_groups(["ethio"]) == [
+        "ethio-asr-amharic",
+        "ethio-asr-oromo",
+        "ethio-asr-multilingual-1b",
+    ]
 
 
 def test_resolve_sunbird_language_code():
@@ -91,6 +123,26 @@ def test_load_multi_source_config():
     assert cfg.dataset.sources[1].dataset_id == "smutuvi/ndizi-1-2025"
 
 
+def test_load_csv_and_ethio_normalize_config():
+    cfg = load_run_config(
+        {
+            "models": ["ethio-asr-oromo"],
+            "dataset": {
+                "type": "csv",
+                "csv_path": "data/manifest.csv",
+                "language_filter": ["om"],
+            },
+            "normalization": {"mode": "ethio"},
+            "local_whisper": {"omni_card": "omniASR_LLM_1B"},
+        }
+    )
+    assert cfg.dataset.type == "csv"
+    assert cfg.dataset.csv_path == "data/manifest.csv"
+    assert cfg.dataset.language_filter == ["om"]
+    assert cfg.normalization.mode == "ethio"
+    assert cfg.local_whisper.omni_card == "omniASR_LLM_1B"
+
+
 def test_expand_dataset_flags():
     sources = expand_dataset_flags(
         ["smutuvi/ndizi-1", "smutuvi/ndizi-1-2025", "google/fleurs"],
@@ -108,7 +160,6 @@ def test_expand_dataset_flags():
 def test_expand_waxalnlp_dataset_flags():
     sources = expand_dataset_flags(["google/WaxalNLP", "google/WaxalNLP:amh_asr"], max_samples=3)
     waxal = [s for s in sources if s["dataset_id"] == "google/WaxalNLP"]
-    # Bare google/WaxalNLP expands to amh_asr + orm_asr only (no hau/swa ASR).
     expanded = [s for s in waxal if s.get("config_name") in {"amh_asr", "orm_asr"}]
     assert len(expanded) >= 2
     assert {s["config_name"] for s in expanded} == {"amh_asr", "orm_asr"}

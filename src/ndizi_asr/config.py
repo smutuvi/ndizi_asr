@@ -16,9 +16,23 @@ class OpenRouterConfig:
 
 @dataclass
 class NormalizationConfig:
+    # mode: default | ethio | none  (ethio = Ge'ez homophone cleanup from ndizi_eval)
+    mode: str = "default"
     lowercase: bool = True
     strip_punctuation: bool = True
     collapse_whitespace: bool = True
+
+
+@dataclass
+class LocalModelConfig:
+    """Shared settings for local Whisper / Gemma / CTC / Omnilingual backends."""
+
+    device: Optional[str] = None  # cuda | mps | cpu | null=auto
+    torch_dtype: Optional[str] = "auto"  # auto | float16 | bfloat16 | float32
+    num_beams: int = 1
+    concurrency: int = 1
+    omni_card: Optional[str] = None  # override Omnilingual card
+    omnilingual_root: Optional[str] = None
 
 
 @dataclass
@@ -58,24 +72,27 @@ class DatasetConfig:
     trust_remote_code: bool = False
     # Extra kwargs forwarded to datasets.load_dataset
     load_kwargs: dict[str, Any] = field(default_factory=dict)
+    # Local CSV / CropConcept (ndizi_eval)
+    csv_path: Optional[str] = None
+    data_root: Optional[str] = None
+    language_filter: list[str] = field(default_factory=list)
+    cropconcept_media_map: Optional[str] = None
+    cropconcept_transcripts: Optional[str] = None
+    cropconcept_audio_dir: Optional[str] = None
+    cropconcept_include_not_counted: bool = False
 
 
-@dataclass
-class LocalWhisperConfig:
-    device: Optional[str] = None  # cuda | mps | cpu | null=auto
-    torch_dtype: Optional[str] = "auto"  # auto | float16 | bfloat16 | float32
-    num_beams: int = 1
-    # Local GPU models are typically safer sequential; override if needed.
-    concurrency: int = 1
+# Back-compat alias
+LocalWhisperConfig = LocalModelConfig
 
 
 @dataclass
 class RunConfig:
-    experiment_name: str = "gemini_asr_bench"
+    experiment_name: str = "ndizi_asr_eval"
     models: list[str] = field(default_factory=list)
     dataset: DatasetConfig = field(default_factory=DatasetConfig)
     openrouter: OpenRouterConfig = field(default_factory=OpenRouterConfig)
-    local_whisper: LocalWhisperConfig = field(default_factory=LocalWhisperConfig)
+    local_whisper: LocalModelConfig = field(default_factory=LocalModelConfig)
     prompt: str = (
         "Transcribe the speech in this audio exactly. "
         "Return only the transcript text with no commentary or labels."
@@ -164,7 +181,7 @@ def load_run_config(raw: dict[str, Any]) -> RunConfig:
     sources = _parse_sources(ds_raw.get("sources"), defaults_for_sources)
 
     return RunConfig(
-        experiment_name=str(raw.get("experiment_name", "gemini_asr_bench")),
+        experiment_name=str(raw.get("experiment_name", "ndizi_asr_eval")),
         models=list(raw.get("models") or []),
         dataset=DatasetConfig(
             type=str(ds_raw.get("type", "fleurs")).lower(),
@@ -182,6 +199,15 @@ def load_run_config(raw: dict[str, Any]) -> RunConfig:
             revision=ds_raw.get("revision"),
             trust_remote_code=bool(ds_raw.get("trust_remote_code", False)),
             load_kwargs=dict(ds_raw.get("load_kwargs") or {}),
+            csv_path=ds_raw.get("csv_path"),
+            data_root=ds_raw.get("data_root"),
+            language_filter=[str(x) for x in (ds_raw.get("language_filter") or [])],
+            cropconcept_media_map=ds_raw.get("cropconcept_media_map"),
+            cropconcept_transcripts=ds_raw.get("cropconcept_transcripts"),
+            cropconcept_audio_dir=ds_raw.get("cropconcept_audio_dir"),
+            cropconcept_include_not_counted=bool(
+                ds_raw.get("cropconcept_include_not_counted", False)
+            ),
         ),
         openrouter=OpenRouterConfig(
             base_url=str(or_raw.get("base_url", "https://openrouter.ai/api/v1")),
@@ -191,14 +217,17 @@ def load_run_config(raw: dict[str, Any]) -> RunConfig:
             temperature=float(or_raw.get("temperature", 0.0)),
             max_tokens=int(or_raw.get("max_tokens", 1024)),
         ),
-        local_whisper=LocalWhisperConfig(
+        local_whisper=LocalModelConfig(
             device=local_raw.get("device"),
             torch_dtype=local_raw.get("torch_dtype", "auto"),
             num_beams=int(local_raw.get("num_beams", 1)),
             concurrency=max(1, int(local_raw.get("concurrency", 1))),
+            omni_card=local_raw.get("omni_card"),
+            omnilingual_root=local_raw.get("omnilingual_root"),
         ),
         prompt=str(raw.get("prompt") or RunConfig.prompt).strip(),
         normalization=NormalizationConfig(
+            mode=str(norm_raw.get("mode", "default")).lower(),
             lowercase=bool(norm_raw.get("lowercase", True)),
             strip_punctuation=bool(norm_raw.get("strip_punctuation", True)),
             collapse_whitespace=bool(norm_raw.get("collapse_whitespace", True)),

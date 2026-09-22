@@ -1,0 +1,23 @@
+# Ethiopia / CropConcept eval (merged from ndizi_eval).
+# Point cropconcept_* paths at your Ethiopia_crop_concept/ndizi_eval tree,
+# or use --csv with a prebuilt manifest.
+experiment_name: cropconcept_oromo
+models:
+  - oromo   # expands: gemini, omnilingual, ethio-ctc, sunbird-51
+dataset:
+  type: cropconcept
+  dataset_id: cropconcept
+  language_filter: [om]
+  # Override these paths for your machine:
+  cropconcept_media_map: /Users/mutuvi/Documents/ndizi/Ethiopia_crop_concept/ndizi_eval/eval_set_final/files/cropconcept-audio-media-map.csv
+  cropconcept_transcripts: /Users/mutuvi/Documents/ndizi/Ethiopia_crop_concept/ndizi_eval/eval_set_final/files/transcription-check_Oromo-Transcript-Evaluation_2026-09-15.csv
+  cropconcept_audio_dir: /Users/mutuvi/Documents/ndizi/Ethiopia_crop_concept/ndizi_eval/eval_set_final/cropconcept-audio-samples
+  cropconcept_include_not_counted: false
+  max_samples: null
+normalization:
+  mode: ethio
+local_whisper:
+  concurrency: 1
+concurrency: 2
+output_dir: results
+resume: true

@@ -350,6 +350,14 @@ class _MultiConfigHFLoader(BaseDatasetLoader):
 
 def build_loader(cfg: DatasetConfig) -> BaseDatasetLoader:
     dtype = (cfg.type or "fleurs").lower()
+    if dtype in {"csv", "manifest"}:
+        from .csv_manifest import CSVManifestLoader
+
+        return CSVManifestLoader(cfg)
+    if dtype in {"cropconcept", "crop_concept"}:
+        from .csv_manifest import CropConceptLoader
+
+        return CropConceptLoader(cfg)
     if cfg.sources:
         return MultiSourceHFLoader(cfg)
     if dtype in {"fleurs", "google/fleurs"}:
@@ -363,5 +371,6 @@ def build_loader(cfg: DatasetConfig) -> BaseDatasetLoader:
             language_config=cfg.config_name or "default",
         )
     raise ValueError(
-        f"Unknown dataset.type={cfg.type!r}. Use 'fleurs' or 'huggingface'."
+        f"Unknown dataset.type={cfg.type!r}. "
+        "Use 'fleurs', 'huggingface', 'csv', or 'cropconcept'."
     )
