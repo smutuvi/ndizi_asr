@@ -55,14 +55,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--model",
+        "--models",
         nargs="+",
         dest="models",
         default=None,
         metavar="MODEL",
         help=(
-            "Model ids or groups (space-separated). Examples: "
-            "--model google/gemini-2.5-flash ethio oromo "
-            "ctc:badrex/Ethio-ASR-oromo omnilingual:omniASR_LLM_1B"
+            "Model ids or groups (space-separated). Alias: --models. Examples: "
+            "--models gemini-2.5-flash omnilingualasr ethio-asr-oromo "
+            "or --model oromo / ethio / whisper-family"
         ),
     )
     p.add_argument(
@@ -115,10 +116,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--language-filter",
+        "--languages",
         nargs="+",
+        dest="language_filter",
         default=None,
         metavar="LANG",
-        help="Keep only these language codes for CSV/CropConcept (e.g. am om)",
+        help=(
+            "Keep only these language codes for CSV/CropConcept (e.g. am om). "
+            "Alias: --languages (ndizi_eval-compatible)."
+        ),
     )
     p.add_argument(
         "--normalize",

@@ -1,27 +1,38 @@
 #!/usr/bin/env bash
-# Multi-model CropConcept Oromo smoke/compare from ndizi_asr.
+# Multi-model CropConcept Oromo compare from ndizi_asr.
 #
-# Usage:
-#   ./scripts/run_cropconcept_compare.sh              # run default models, n=10
-#   ./scripts/run_cropconcept_compare.sh list          # list models used by this script
-#   ./scripts/run_cropconcept_compare.sh list-all      # list full ndizi_asr registry
-#   ./scripts/run_cropconcept_compare.sh run [flags…]  # same as default run
-#   MAX_SAMPLES=10 ./scripts/run_cropconcept_compare.sh
+# Ethiopia-style invocation (same flags as ethiopia_asr_eval run):
 #
-# Defaults target the GPU box layout:
-#   EVAL_ROOT=/local/ndizi/4.Scripts/ndizi_eval
+#   ./scripts/run_cropconcept_compare.sh \
+#     --models \
+#       gemini-2.5-flash \
+#       omnilingualasr \
+#       omnilingualasr-ctc \
+#       ethio-asr-oromo \
+#       ethio-asr-multilingual-1b \
+#       sunbird-whisper-51 \
+#     --csv /local/ndizi/4.Scripts/ndizi_eval/data/manifest_cropconcept_oromo.csv \
+#     --languages om \
+#     --max-samples 10
+#
+# Or use the group alias:
+#   ./scripts/run_cropconcept_compare.sh --models oromo --csv ... --languages om
+#
+# Helpers:
+#   ./scripts/run_cropconcept_compare.sh list
+#   ./scripts/run_cropconcept_compare.sh list-all
+#
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 EVAL_ROOT="${EVAL_ROOT:-/local/ndizi/4.Scripts/ndizi_eval}"
-CSV="${CSV:-${EVAL_ROOT}/data/manifest_cropconcept_oromo.csv}"
+DEFAULT_CSV="${EVAL_ROOT}/data/manifest_cropconcept_oromo.csv"
 MAX_SAMPLES="${MAX_SAMPLES:-10}"
 EXPERIMENT="${EXPERIMENT:-cropconcept_oromo_n${MAX_SAMPLES}}"
 
-# Default: same set as ndizi_eval --models oromo
-MODELS=(
+DEFAULT_MODELS=(
   gemini-2.5-flash
   omnilingualasr
   omnilingualasr-ctc
@@ -31,17 +42,27 @@ MODELS=(
 )
 
 list_run_models() {
-  echo "Models in this script (${#MODELS[@]}):"
+  echo "Default models for this script (${#DEFAULT_MODELS[@]}):"
   local i=1
-  for m in "${MODELS[@]}"; do
+  for m in "${DEFAULT_MODELS[@]}"; do
     printf "  %d. %s\n" "$i" "$m"
     i=$((i + 1))
   done
   echo
-  echo "Group alias: oromo  (same set)"
+  echo "Same as: --models oromo"
+  echo
+  echo "Example:"
+  echo "  ./scripts/run_cropconcept_compare.sh \\"
+  echo "    --models \\"
+  for m in "${DEFAULT_MODELS[@]}"; do
+    echo "      $m \\"
+  done
+  echo "    --csv ${DEFAULT_CSV} \\"
+  echo "    --languages om \\"
+  echo "    --max-samples ${MAX_SAMPLES}"
 }
 
-CMD="${1:-run}"
+CMD="${1:-}"
 case "$CMD" in
   list|models)
     list_run_models
@@ -51,40 +72,104 @@ case "$CMD" in
     python -m ndizi_asr.cli --list-models
     exit 0
     ;;
-  run|compare)
-    shift || true
-    ;;
   -h|--help|help)
-    sed -n '2,12p' "$0"
+    sed -n '2,25p' "$0"
     exit 0
     ;;
-  -*)
-    # Flags passed directly → treat as run with those extra flags
-    ;;
-  *)
-    # Unknown first token: pass through as extra CLI flags to ndizi_asr
+  run|compare)
+    shift
     ;;
 esac
 
-if [[ ! -f "$CSV" ]]; then
-  echo "CSV not found: $CSV" >&2
-  echo "Set CSV=... or EVAL_ROOT=... to your ndizi_eval tree." >&2
-  exit 2
+# Detect whether the user already passed models / csv / languages.
+USER_ARGS=("$@")
+HAS_MODELS=0
+HAS_CSV=0
+HAS_LANG=0
+HAS_MAX=0
+HAS_NORM=0
+HAS_OUT=0
+HAS_EXP=0
+i=0
+while [[ $i -lt ${#USER_ARGS[@]} ]]; do
+  case "${USER_ARGS[$i]}" in
+    --model|--models) HAS_MODELS=1 ;;
+    --csv) HAS_CSV=1 ;;
+    --languages|--language-filter) HAS_LANG=1 ;;
+    --max-samples) HAS_MAX=1 ;;
+    --normalize) HAS_NORM=1 ;;
+    --output-dir) HAS_OUT=1 ;;
+    --experiment-name) HAS_EXP=1 ;;
+  esac
+  i=$((i + 1))
+done
+
+ARGS=(--env-file .env --data-root "$EVAL_ROOT")
+
+if [[ $HAS_MODELS -eq 0 ]]; then
+  ARGS+=(--models "${DEFAULT_MODELS[@]}")
+fi
+if [[ $HAS_CSV -eq 0 ]]; then
+  ARGS+=(--csv "$DEFAULT_CSV")
+fi
+if [[ $HAS_LANG -eq 0 ]]; then
+  ARGS+=(--languages om)
+fi
+if [[ $HAS_NORM -eq 0 ]]; then
+  ARGS+=(--normalize ethio)
+fi
+if [[ $HAS_MAX -eq 0 ]]; then
+  ARGS+=(--max-samples "$MAX_SAMPLES")
+fi
+if [[ $HAS_OUT -eq 0 ]]; then
+  ARGS+=(--output-dir results)
+fi
+if [[ $HAS_EXP -eq 0 ]]; then
+  ARGS+=(--experiment-name "$EXPERIMENT")
 fi
 
-echo "CSV=$CSV"
-echo "MAX_SAMPLES=$MAX_SAMPLES"
-echo "EXPERIMENT=$EXPERIMENT"
-list_run_models
+# Resolve relative --csv against EVAL_ROOT if needed (best-effort preview)
+CSV_PREVIEW="$DEFAULT_CSV"
+i=0
+while [[ $i -lt ${#USER_ARGS[@]} ]]; do
+  if [[ "${USER_ARGS[$i]}" == "--csv" && $((i + 1)) -lt ${#USER_ARGS[@]} ]]; then
+    CSV_PREVIEW="${USER_ARGS[$((i + 1))]}"
+  fi
+  i=$((i + 1))
+done
+if [[ "$CSV_PREVIEW" != /* && ! -f "$CSV_PREVIEW" && -f "${EVAL_ROOT}/${CSV_PREVIEW}" ]]; then
+  # Rewrite relative csv path to absolute under EVAL_ROOT for the CLI call
+  NEW_ARGS=()
+  i=0
+  while [[ $i -lt ${#USER_ARGS[@]} ]]; do
+    if [[ "${USER_ARGS[$i]}" == "--csv" && $((i + 1)) -lt ${#USER_ARGS[@]} ]]; then
+      NEW_ARGS+=(--csv "${EVAL_ROOT}/${USER_ARGS[$((i + 1))]}")
+      i=$((i + 2))
+      continue
+    fi
+    NEW_ARGS+=("${USER_ARGS[$i]}")
+    i=$((i + 1))
+  done
+  USER_ARGS=("${NEW_ARGS[@]}")
+  CSV_PREVIEW="${EVAL_ROOT}/${CSV_PREVIEW#./}"
+fi
 
-python -m ndizi_asr.cli \
-  --env-file .env \
-  --model "${MODELS[@]}" \
-  --csv "$CSV" \
-  --data-root "$EVAL_ROOT" \
-  --language-filter om \
-  --normalize ethio \
-  --max-samples "$MAX_SAMPLES" \
-  --output-dir results \
-  --experiment-name "$EXPERIMENT" \
-  "$@"
+if [[ ! -f "$CSV_PREVIEW" ]]; then
+  # Only enforce when we can resolve a concrete path
+  if [[ $HAS_CSV -eq 0 || "$CSV_PREVIEW" == /* || "$CSV_PREVIEW" == */* ]]; then
+    if [[ ! -f "$CSV_PREVIEW" ]]; then
+      echo "CSV not found: $CSV_PREVIEW" >&2
+      echo "Pass --csv PATH or set EVAL_ROOT=... to your ndizi_eval tree." >&2
+      exit 2
+    fi
+  fi
+fi
+
+echo "=== CropConcept compare ==="
+echo "EVAL_ROOT=$EVAL_ROOT"
+list_run_models
+echo
+echo "Running: python -m ndizi_asr.cli ${ARGS[*]} ${USER_ARGS[*]}"
+echo
+
+python -m ndizi_asr.cli "${ARGS[@]}" "${USER_ARGS[@]}"
