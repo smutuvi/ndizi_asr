@@ -56,6 +56,18 @@ EDITOR_ALIASES = {
     "sonnet": "anthropic/claude-sonnet-4.5",
     "gpt-4.1": "openai/gpt-4.1",
     "gpt4.1": "openai/gpt-4.1",
+    # OpenAI GPT-6 family (OpenRouter)
+    "gpt-6-luna": "openai/gpt-6-luna",
+    "gpt6-luna": "openai/gpt-6-luna",
+    "luna": "openai/gpt-6-luna",
+    "leo": "openai/gpt-6-luna",  # common misspelling of Luna
+    "gpt-6-leo": "openai/gpt-6-luna",
+    "gpt-6-sol": "openai/gpt-6-sol",
+    "gpt6-sol": "openai/gpt-6-sol",
+    "sol": "openai/gpt-6-sol",
+    "gpt-6-astra": "openai/gpt-6-astra",
+    "gpt6-astra": "openai/gpt-6-astra",
+    "astra": "openai/gpt-6-astra",
     "gemini": "google/gemini-2.5-flash",
     "gemini-flash": "google/gemini-2.5-flash",
     "gemini-pro": "google/gemini-2.5-pro",
