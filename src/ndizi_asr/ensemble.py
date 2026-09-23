@@ -188,12 +188,27 @@ def _print_table(rows: list[dict[str, Any]], *, title: str = "Smart fusion compa
         print(fmt_row(tr))
 
 
+DEFAULT_OPENROUTER_ASR_PROMPT = (
+    "Transcribe the speech in this audio exactly. "
+    "Return only the transcript text with no commentary, labels, or punctuation "
+    "beyond what is spoken. Preserve the original language of the audio."
+)
+
+
 class _ASRPool:
-    def __init__(self, device: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        device: Optional[str] = None,
+        *,
+        openrouter_client: Optional[OpenRouterASRClient] = None,
+        asr_prompt: str = DEFAULT_OPENROUTER_ASR_PROMPT,
+    ) -> None:
         self.device = device
         self._ctc: dict[str, HuggingFaceCTCClient] = {}
         self._whisper: dict[str, HuggingFaceWhisperClient] = {}
         self._omni: dict[str, OmnilingualASRClient] = {}
+        self._openrouter = openrouter_client
+        self._asr_prompt = asr_prompt
 
     def transcribe(self, model_key: str, sample: AudioSample) -> tuple[str, Optional[str]]:
         spec = parse_model_spec(model_key)
@@ -229,8 +244,21 @@ class _ASRPool:
                     language=sample.language,
                     language_config=sample.language_config,
                 )
+            elif spec.backend == "openrouter":
+                if self._openrouter is None:
+                    return "", "OpenRouter client required for ASR model " + model_key
+                audio_b64, fmt = audio_array_to_wav_base64(
+                    sample.audio_array, sample.sampling_rate
+                )
+                result = self._openrouter.transcribe(
+                    model=spec.model_id,
+                    audio_b64=audio_b64,
+                    audio_format=fmt,
+                    prompt=self._asr_prompt,
+                    language=sample.language or sample.language_config,
+                )
             else:
-                return "", f"ensemble ASR backends must be local (got {spec.backend})"
+                return "", f"unsupported ensemble ASR backend: {spec.backend}"
             return result.text or "", result.error
         except Exception as exc:  # noqa: BLE001
             return "", str(exc)
@@ -436,7 +464,7 @@ def run_fusion(
     if reused:
         logger.info("Reusing ASR hypotheses from %s (%d rows)", reuse_hyps, len(reused))
 
-    pool = _ASRPool(device=device)
+    pool = _ASRPool(device=device, openrouter_client=None)  # set after llm client below
     or_cfg = openrouter
     is_gpt6 = "gpt-6" in editor_model.lower()
     # GPT-6 defaults to reasoning; 1024 often gets burned on hidden tokens → empty content.
@@ -453,6 +481,7 @@ def run_fusion(
             max_tokens=max(openrouter.max_tokens, 4096 if need_more_tokens else openrouter.max_tokens),
         )
     llm = OpenRouterASRClient(api_key=api_key, config=or_cfg)
+    pool = _ASRPool(device=device, openrouter_client=llm)
     if reasoning:
         logger.info("OpenRouter reasoning config for %s: %s", editor_model, reasoning)
 

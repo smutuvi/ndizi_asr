@@ -79,6 +79,7 @@ MODEL_GROUPS: dict[str, list[str]] = {
     "swahili": [
         "ndizi-whisper-turbo",
         "w2v-bert-swahili",
+        "gemini-2.5-flash",
     ],
     "w2v-bert": ["ethio-asr-amharic", "ethio-asr-oromo"],
     "w2v-bert-family": ["ethio-asr-amharic", "ethio-asr-oromo"],
