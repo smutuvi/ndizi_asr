@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_ASR_MODELS = (
     "ethio-asr-multilingual-1b",
     "ethio-asr-oromo",
+    "sunbird-whisper-51",
 )
 
 EDITOR_ALIASES = {
@@ -362,37 +363,52 @@ def run_fusion(
         raise RuntimeError("No evaluation samples loaded")
 
     # Ensure ASR hyps exist for every sample (reuse or run).
+    # Reused rows may omit newer models (e.g. add sunbird on top of an Ethio-only cache).
     records: list[dict[str, Any]] = []
     for sample in tqdm(samples, desc="asr"):
         sid = sample.sample_id
-        if sid in done and done[sid].get("hypotheses"):
-            base = dict(done[sid])
-        elif sid in reused and reused[sid].get("hypotheses"):
+        if sid in done and done[sid].get("hypotheses") is not None:
+            base = {
+                "sample_id": sid,
+                "dataset_id": done[sid].get("dataset_id", sample.dataset_id),
+                "language": done[sid].get("language", sample.language),
+                "language_config": done[sid].get(
+                    "language_config", sample.language_config
+                ),
+                "reference": done[sid].get("reference", sample.reference),
+                "hypotheses": dict(done[sid].get("hypotheses") or {}),
+                "asr_errors": dict(done[sid].get("asr_errors") or {}),
+            }
+        elif sid in reused and reused[sid].get("hypotheses") is not None:
             base = {
                 "sample_id": sid,
                 "dataset_id": sample.dataset_id,
                 "language": sample.language,
                 "language_config": sample.language_config,
                 "reference": sample.reference,
-                "hypotheses": reused[sid]["hypotheses"],
-                "asr_errors": reused[sid].get("asr_errors") or {},
+                "hypotheses": dict(reused[sid].get("hypotheses") or {}),
+                "asr_errors": dict(reused[sid].get("asr_errors") or {}),
             }
         else:
-            hyps: dict[str, str] = {}
-            errors: dict[str, Optional[str]] = {}
-            for m in asr_models:
+            base = {
+                "sample_id": sid,
+                "dataset_id": sample.dataset_id,
+                "language": sample.language,
+                "language_config": sample.language_config,
+                "reference": sample.reference,
+                "hypotheses": {},
+                "asr_errors": {},
+            }
+
+        hyps = dict(base["hypotheses"])
+        errors = dict(base["asr_errors"])
+        for m in asr_models:
+            if m not in hyps:
                 text, err = pool.transcribe(m, sample)
                 hyps[m] = text
                 errors[m] = err
-            base = {
-                "sample_id": sid,
-                "dataset_id": sample.dataset_id,
-                "language": sample.language,
-                "language_config": sample.language_config,
-                "reference": sample.reference,
-                "hypotheses": hyps,
-                "asr_errors": errors,
-            }
+        base["hypotheses"] = hyps
+        base["asr_errors"] = errors
         base["_sample"] = sample  # transient; stripped before write
         records.append(base)
 
