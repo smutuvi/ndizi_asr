@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # Smart fusion: Ethio CTC ×2 + Sunbird Whisper-51 + LLM editor.
 #
-# ASR hyp cache (2-model Ethio-only; still useful — Sunbird is filled on demand):
-#   results/llm_fusion_full/fusion_predictions.jsonl
+# ASR hyp cache:
+#   results/llm_fusion_full3/fusion_predictions.jsonl   # Ethio×2 + Sunbird (preferred)
+#   results/llm_fusion_full/fusion_predictions.jsonl    # Ethio×2 only (fallback)
 #
-# 3-model Opus few-shot (reuses Ethio hyps, runs Sunbird once, then fuses):
+# Save 3-model cache from a completed sunbird fusion run (no LLM/ASR re-run):
+#   python -m ndizi_asr.save_hyp_cache \
+#     --from-dir results/llm_fusion_opus55_fs8_sunbird \
+#     --from-file results/llm_fusion_full/fusion_predictions.jsonl \
+#     -o results/llm_fusion_full3/fusion_predictions.jsonl
+#
+# 3-model Opus few-shot (auto-reuses full3 when present):
 #   EXPERIMENT=llm_fusion_opus55_fs8_sunbird \
 #     ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --seed 42 --no-resume
-#
-# Optional: rebuild a 3-model hyp cache for later A/Bs (runs all ASR + editor):
-#   EXPERIMENT=llm_fusion_full3 REUSE_HYPS= \
-#     ./scripts/run_llm_fusion_smoke.sh --no-resume
-#   # then: REUSE_HYPS=results/llm_fusion_full3/fusion_predictions.jsonl ...
 #
 # Override hyp cache / disable reuse:
 #   REUSE_HYPS=/path/to/fusion_predictions.jsonl ./scripts/run_llm_fusion_smoke.sh ...
@@ -29,8 +31,16 @@ MAX_SAMPLES="${MAX_SAMPLES:-}"
 EDITOR="${EDITOR:-opus-5.5}"
 ASR_MODELS="${ASR_MODELS:-ethio-asr-multilingual-1b ethio-asr-oromo sunbird-whisper-51}"
 
-# Default ASR hypothesis cache from the full counted run (Ethio×2)
-REUSE_HYPS="${REUSE_HYPS:-${ROOT}/results/llm_fusion_full/fusion_predictions.jsonl}"
+# Default hyp cache: prefer 3-model (Ethio×2+Sunbird), else Ethio-only full run
+if [[ -z "${REUSE_HYPS+x}" ]]; then
+  if [[ -f "${ROOT}/results/llm_fusion_full3/fusion_predictions.jsonl" ]]; then
+    REUSE_HYPS="${ROOT}/results/llm_fusion_full3/fusion_predictions.jsonl"
+  else
+    REUSE_HYPS="${ROOT}/results/llm_fusion_full/fusion_predictions.jsonl"
+  fi
+else
+  REUSE_HYPS="${REUSE_HYPS}"
+fi
 
 SAMPLE_ARGS=()
 if [[ -z "$MAX_SAMPLES" || "$MAX_SAMPLES" == "all" || "$MAX_SAMPLES" == "0" || "$MAX_SAMPLES" == "-1" ]]; then
