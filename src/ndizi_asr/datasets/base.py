@@ -89,15 +89,45 @@ def extract_audio(value: Any) -> tuple[np.ndarray, int]:
                 array, sr = sf.read(path)
             else:
                 raise ValueError(f"Unsupported audio dict keys: {list(value.keys())}")
-        return np.asarray(array), int(sr)
+        return _to_mono_float32(array), int(sr)
 
     if isinstance(value, str):
         import soundfile as sf
 
         array, sr = sf.read(value)
-        return np.asarray(array), int(sr)
+        return _to_mono_float32(array), int(sr)
+
+    # Hugging Face datasets >= 4.x: torchcodec AudioDecoder
+    if hasattr(value, "get_all_samples"):
+        samples = value.get_all_samples()
+        data = samples.data
+        if hasattr(data, "detach"):
+            data = data.detach()
+        if hasattr(data, "cpu"):
+            data = data.cpu().numpy()
+        else:
+            data = np.asarray(data)
+        sr = int(getattr(samples, "sample_rate", None) or getattr(samples, "sampling_rate"))
+        return _to_mono_float32(data), sr
+
+    # Legacy / duck-typed objects with .array + .sampling_rate
+    array = getattr(value, "array", None)
+    sr = getattr(value, "sampling_rate", None) or getattr(value, "sample_rate", None)
+    if array is not None and sr is not None:
+        return _to_mono_float32(array), int(sr)
 
     raise ValueError(f"Unsupported audio value type: {type(value)}")
+
+
+def _to_mono_float32(array: Any) -> np.ndarray:
+    arr = np.asarray(array, dtype=np.float32)
+    if arr.ndim == 2:
+        # (channels, samples) from torchcodec, or (samples, channels) from soundfile
+        if arr.shape[0] <= 8 and arr.shape[0] < arr.shape[1]:
+            arr = arr.mean(axis=0) if arr.shape[0] > 1 else arr[0]
+        else:
+            arr = arr.mean(axis=1) if arr.shape[1] > 1 else arr[:, 0]
+    return np.ascontiguousarray(arr, dtype=np.float32)
 
 
 class BaseDatasetLoader:
