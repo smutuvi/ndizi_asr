@@ -144,13 +144,14 @@ class OpenRouterASRClient:
         model: str,
         prompt: str,
         system: Optional[str] = None,
+        reasoning: Optional[dict[str, Any]] = None,
     ) -> TranscriptionResult:
         """Text-only chat completion (LLM fusion / post-edit)."""
         messages: list[dict[str, Any]] = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
-        return self._chat_completions(model=model, messages=messages)
+        return self._chat_completions(model=model, messages=messages, reasoning=reasoning)
 
     def chat_with_audio(
         self,
@@ -160,6 +161,7 @@ class OpenRouterASRClient:
         audio_b64: str,
         audio_format: str = "wav",
         system: Optional[str] = None,
+        reasoning: Optional[dict[str, Any]] = None,
     ) -> TranscriptionResult:
         """Multimodal chat: text prompt + input_audio (audio+hyp fusion)."""
         messages: list[dict[str, Any]] = []
@@ -177,13 +179,14 @@ class OpenRouterASRClient:
                 ],
             }
         )
-        return self._chat_completions(model=model, messages=messages)
+        return self._chat_completions(model=model, messages=messages, reasoning=reasoning)
 
     def _chat_completions(
         self,
         *,
         model: str,
         messages: list[dict[str, Any]],
+        reasoning: Optional[dict[str, Any]] = None,
     ) -> TranscriptionResult:
         payload: dict[str, Any] = {
             "model": model,
@@ -191,16 +194,22 @@ class OpenRouterASRClient:
             "max_tokens": self.config.max_tokens,
             "messages": messages,
         }
+        if reasoning:
+            payload["reasoning"] = reasoning
         url = f"{self.config.base_url.rstrip('/')}/chat/completions"
         last_error: Optional[str] = None
         started = time.perf_counter()
+        # Thinking models can be slow
+        timeout = self.config.timeout_seconds
+        if reasoning:
+            timeout = max(timeout, 300.0)
 
         for attempt in range(1, self.config.max_retries + 1):
             try:
                 resp = self.session.post(
                     url,
                     json=payload,
-                    timeout=self.config.timeout_seconds,
+                    timeout=timeout,
                 )
                 if resp.status_code in {429, 500, 502, 503, 504}:
                     last_error = f"HTTP {resp.status_code}: {resp.text[:300]}"

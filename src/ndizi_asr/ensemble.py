@@ -90,6 +90,19 @@ def resolve_editor_model(name: str) -> str:
     return EDITOR_ALIASES.get(raw, EDITOR_ALIASES.get(raw.lower(), raw))
 
 
+def build_reasoning_config(
+    *,
+    thinking: bool,
+    effort: str = "high",
+    exclude: bool = True,
+) -> Optional[dict[str, Any]]:
+    """OpenRouter unified reasoning / thinking parameter."""
+    if not thinking:
+        return None
+    # exclude=True: keep final transcript clean (don't return thinking in content)
+    return {"enabled": True, "effort": effort, "exclude": exclude}
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
@@ -258,9 +271,12 @@ def run_fusion(
     seed: int = 42,
     use_audio: bool = False,
     reuse_hyps: Optional[Path] = None,
+    thinking: bool = False,
+    thinking_effort: str = "high",
 ) -> dict[str, Any]:
     asr_models = expand_model_groups(asr_models)
     editor_model = resolve_editor_model(editor_model)
+    reasoning = build_reasoning_config(thinking=thinking, effort=thinking_effort)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     mode_bits = []
@@ -268,6 +284,8 @@ def run_fusion(
         mode_bits.append(f"fs{few_shot}")
     if use_audio:
         mode_bits.append("audio")
+    if thinking:
+        mode_bits.append(f"think-{thinking_effort}")
     mode_suffix = ("+" + "+".join(mode_bits)) if mode_bits else ""
     fusion_name = f"fusion:{editor_model}{mode_suffix}"
     pred_name = "fusion_predictions"
@@ -293,7 +311,17 @@ def run_fusion(
         logger.info("Reusing ASR hypotheses from %s (%d rows)", reuse_hyps, len(reused))
 
     pool = _ASRPool(device=device)
-    llm = OpenRouterASRClient(api_key=api_key, config=openrouter)
+    or_cfg = openrouter
+    if thinking and or_cfg.max_tokens < 4096:
+        or_cfg = OpenRouterConfig(
+            base_url=openrouter.base_url,
+            timeout_seconds=max(openrouter.timeout_seconds, 300.0),
+            max_retries=openrouter.max_retries,
+            retry_backoff_seconds=openrouter.retry_backoff_seconds,
+            temperature=openrouter.temperature,
+            max_tokens=4096,
+        )
+    llm = OpenRouterASRClient(api_key=api_key, config=or_cfg)
 
     # Materialize samples (CropConcept counted set is small).
     samples = list(build_loader(dataset_cfg).iter_samples())
@@ -392,6 +420,8 @@ def run_fusion(
             and prior.get("fusion_model") == editor_model
             and bool(prior.get("few_shot")) == (n_shot > 0)
             and bool(prior.get("use_audio")) == use_audio
+            and bool(prior.get("thinking")) == thinking
+            and prior.get("thinking_effort", "high") == thinking_effort
             and prior.get("fusion") is not None
         )
         if mode_ok:
@@ -414,12 +444,14 @@ def run_fusion(
                     audio_b64=audio_b64,
                     audio_format=fmt,
                     system=FUSION_SYSTEM,
+                    reasoning=reasoning,
                 )
             else:
                 fused = llm.chat_text(
                     model=editor_model,
                     prompt=prompt,
                     system=FUSION_SYSTEM,
+                    reasoning=reasoning,
                 )
             row = {
                 "sample_id": sid,
@@ -432,6 +464,8 @@ def run_fusion(
                 "fusion_model": editor_model,
                 "few_shot": n_shot,
                 "use_audio": use_audio,
+                "thinking": thinking,
+                "thinking_effort": thinking_effort if thinking else None,
                 "seed": seed,
                 "split": "eval",
                 "fusion": fused.text,
@@ -470,6 +504,8 @@ def run_fusion(
         "editor": editor_model,
         "few_shot": n_shot,
         "use_audio": use_audio,
+        "thinking": thinking,
+        "thinking_effort": thinking_effort if thinking else None,
         "seed": seed,
         "num_eval": len(eval_indices),
         "systems": {},
@@ -491,12 +527,14 @@ def run_fusion(
 
     table_rows.sort(key=lambda r: (r["wer_n"] is None, float(r["wer_n"] or 0.0)))
     title = "Smart fusion comparison"
-    if n_shot or use_audio:
+    if n_shot or use_audio or thinking:
         title += f" (eval n={len(eval_indices)}"
         if n_shot:
             title += f", few-shot={n_shot}"
         if use_audio:
             title += ", audio"
+        if thinking:
+            title += f", thinking={thinking_effort}"
         title += ")"
     _print_table(table_rows, title=title)
 
@@ -578,6 +616,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Reuse ASR hypotheses from a prior fusion_predictions.jsonl (skip ASR)",
     )
+    p.add_argument(
+        "--thinking",
+        action="store_true",
+        help="Enable OpenRouter reasoning/thinking tokens for the editor (Claude Opus)",
+    )
+    p.add_argument(
+        "--thinking-effort",
+        default="high",
+        choices=["minimal", "low", "medium", "high", "xhigh", "max"],
+        help="Reasoning effort when --thinking is set (default: high)",
+    )
     p.add_argument("--device", default=None)
     p.add_argument("--output-dir", default="results")
     p.add_argument("--experiment-name", default=None)
@@ -658,6 +707,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             bits.append(f"fs{args.few_shot}")
         if args.audio:
             bits.append("audio")
+        if args.thinking:
+            bits.append(f"think-{args.thinking_effort}")
         exp = "_".join(bits)
         raw["experiment_name"] = exp
         cfg = load_run_config(raw)
@@ -670,6 +721,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"  Editor:   {editor}")
     print(f"  Few-shot: {args.few_shot} (seed={args.seed})")
     print(f"  Audio:    {args.audio}")
+    print(f"  Thinking: {args.thinking}" + (f" (effort={args.thinking_effort})" if args.thinking else ""))
     print(f"  Out:      {out}")
 
     run_fusion(
@@ -687,6 +739,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         seed=args.seed,
         use_audio=args.audio,
         reuse_hyps=args.reuse_hyps,
+        thinking=args.thinking,
+        thinking_effort=args.thinking_effort,
     )
     return 0
 
