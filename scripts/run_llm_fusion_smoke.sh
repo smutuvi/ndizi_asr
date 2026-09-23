@@ -35,6 +35,14 @@
 #     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
 #     --experiment-name llm_fusion_opus55_fs8_glossary
 #
+# Error sheet (Opus fs8 baseline → prompt tweaks; no glossary):
+#   python -m ndizi_asr.error_sheet \
+#     --predictions results/llm_fusion_opus55_fs8/fusion_predictions.jsonl
+#   # read results/llm_fusion_opus55_fs8/error_sheet.md  then edit prompts in ensemble.py
+#   ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --editor opus-5.5 --seed 42 --no-resume \
+#     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
+#     --experiment-name llm_fusion_opus55_fs8_promptv2
+#
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
