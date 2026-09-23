@@ -76,22 +76,25 @@ EDITOR_ALIASES = {
 }
 
 FUSION_SYSTEM = (
-    "You are an expert ASR output editor for African languages. "
-    "You reconcile multiple automatic transcriptions into one accurate transcript. "
+    "You are a conservative ASR fusion editor for Afaan Oromo / Amharic. "
+    "Your job is to SELECT and lightly repair words from the given ASR hypotheses — "
+    "not to paraphrase, translate, or rewrite into more fluent speech. "
     "Return ONLY the final transcript text — no quotes, labels, or commentary."
 )
 
 FUSION_USER_TEMPLATE = """Language: {language}
 Domain: Ethiopian CropConcept agronomy / hybrid wheat farmer speech (Oromo or Amharic).
 {few_shot_block}
-ASR hypotheses for THIS utterance (may contain errors; use as evidence, do not invent new content):
+ASR hypotheses for THIS utterance (may contain errors; these are your ONLY allowed vocabulary):
 {hyp_block}
 {audio_note}
-Instructions:
-- Prefer words/phrases supported by at least one hypothesis (and by the audio if provided).
-- When hypotheses disagree, pick the reading that is more fluent and domain-plausible for CropConcept / wheat farming.
-- Preserve the original language and orthography (Afaan Oromo or Amharic); do not translate.
-- Fix obvious ASR gibberish and duplicated fragments.
+Instructions (follow strictly):
+- Stay close to the hypotheses. Prefer copying spans from one hypothesis over inventing new wording.
+- Every content word in your output should appear in at least one hypothesis (minor spelling fixes OK: doubled letters, near-homophones already attested).
+- Do NOT introduce synonyms, discourse fillers, or "more natural" Oromo/Amharic that is absent from both hypotheses.
+- When hypotheses disagree, pick the clearer/more complete reading; do not blend into a third paraphrase.
+- Preserve numbers, quantities, and named entities exactly as in the hypotheses (do not change digits).
+- Delete only clear ASR garbage / duplicated fragments; do not drop long attested phrases to "clean up" style.
 - If both hypotheses are empty, return an empty string.
 {glossary_block}
 Final transcript:"""
