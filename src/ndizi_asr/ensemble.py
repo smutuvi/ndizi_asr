@@ -307,10 +307,14 @@ def run_fusion(
         mode_bits.append(f"think-{thinking_effort}")
     mode_suffix = ("+" + "+".join(mode_bits)) if mode_bits else ""
     fusion_name = f"fusion:{editor_model}{mode_suffix}"
-    pred_name = "fusion_predictions"
-    if mode_bits:
-        pred_name += "_" + "_".join(mode_bits)
-    pred_path = output_dir / f"{pred_name}.jsonl"
+    # Stable name per experiment dir (modes are separated by --experiment-name).
+    pred_path = output_dir / "fusion_predictions.jsonl"
+    # Migrate older fs8/audio/think filenames if present
+    if not pred_path.exists() and mode_bits:
+        legacy = output_dir / f"fusion_predictions_{'_'.join(mode_bits)}.jsonl"
+        if legacy.exists():
+            legacy.rename(pred_path)
+            logger.info("Renamed legacy predictions %s → %s", legacy.name, pred_path.name)
 
     done: dict[str, dict[str, Any]] = {}
     if resume and pred_path.exists():
@@ -641,6 +645,7 @@ def run_fusion(
                 }
             )
     logger.info("Wrote %s and %s", metrics_path, csv_path)
+    logger.info("Predictions → %s", pred_path)
     return metrics_out
 
 

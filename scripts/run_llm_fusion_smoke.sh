@@ -15,6 +15,7 @@
 # Error sheet → prompt tweak → re-run:
 #   python -m ndizi_asr.error_sheet \
 #     --predictions results/llm_fusion_opus55_fs8/fusion_predictions.jsonl
+#   # (also accepts legacy fusion_predictions_fs8.jsonl in that dir)
 #   # edit FUSION_* prompts in src/ndizi_asr/ensemble.py
 #   EDITOR=opus-5.5 EXPERIMENT=llm_fusion_opus55_fs8_promptv2 \
 #     ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --seed 42 --no-resume

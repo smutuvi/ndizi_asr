@@ -35,6 +35,24 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def resolve_predictions_path(path: Path) -> Path:
+    """Accept fusion_predictions.jsonl or legacy fusion_predictions_fs8.jsonl."""
+    if path.exists():
+        return path
+    if path.name == "fusion_predictions.jsonl" and path.parent.is_dir():
+        legacy = sorted(path.parent.glob("fusion_predictions_*.jsonl"))
+        if legacy:
+            return legacy[0]
+    raise FileNotFoundError(
+        f"No predictions at {path}"
+        + (
+            f" (also checked {path.parent}/fusion_predictions_*.jsonl)"
+            if path.parent.is_dir()
+            else ""
+        )
+    )
+
+
 def _norm(text: str, language: str = "om") -> str:
     return normalize_text(text, NormalizationConfig(mode="ethio"), language=language)
 
@@ -132,6 +150,7 @@ def analyze(
     *,
     asr_models: Optional[list[str]] = None,
 ) -> list[UtteranceErrors]:
+    predictions = resolve_predictions_path(Path(predictions))
     rows = _load_jsonl(predictions)
     out: list[UtteranceErrors] = []
     for row in rows:
@@ -277,13 +296,15 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     if not errors:
         raise SystemExit(f"No rows in {args.predictions}")
 
-    out_dir = args.output_dir or args.predictions.parent
+    pred_resolved = resolve_predictions_path(Path(args.predictions))
+    out_dir = args.output_dir or pred_resolved.parent
     md_path = out_dir / "error_sheet.md"
     tsv_path = out_dir / "error_sheet.tsv"
     write_markdown(md_path, errors, top_n=args.top)
     write_tsv(tsv_path, errors)
     print_summary(errors, top_n=min(8, args.top))
-    print(f"\nWrote {md_path}")
+    print(f"\nPredictions: {pred_resolved}")
+    print(f"Wrote {md_path}")
     print(f"Wrote {tsv_path}")
     return 0
 
