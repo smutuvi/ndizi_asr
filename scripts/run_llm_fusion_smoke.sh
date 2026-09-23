@@ -1,47 +1,28 @@
 #!/usr/bin/env bash
 # Smart fusion: best-2 Ethio CTC + LLM editor.
 #
-# Baseline (text-only fusion, all counted clips):
+# ASR hyp cache (keep this; all editor A/Bs reuse it):
+#   results/llm_fusion_full/fusion_predictions.jsonl
+#
+# Build / refresh that cache once (runs ASR + editor on all counted clips):
 #   ./scripts/run_llm_fusion_smoke.sh
+#   # → results/llm_fusion_full/{fusion_predictions.jsonl,fusion_metrics.json,fusion_summary.csv}
 #
-# Few-shot (8 gold examples, score held-out ~22):
-#   ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --no-resume \
-#     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
-#     --experiment-name llm_fusion_fs8
+# Opus 5.5 few-shot baseline (auto --reuse-hyps when cache exists):
+#   EDITOR=opus-5.5 EXPERIMENT=llm_fusion_opus55_fs8 \
+#     ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --seed 42 --no-resume
 #
-# Audio + hyps (use Gemini editor for multimodal):
-#   ./scripts/run_llm_fusion_smoke.sh --audio --editor gemini --no-resume \
-#     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
-#     --experiment-name llm_fusion_audio
-#
-# Few-shot + audio:
-#   ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --audio --editor gemini --no-resume \
-#     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
-#     --experiment-name llm_fusion_fs8_audio
-#
-# Glossary from few-shot only (no eval pollution), then Opus A/B:
-#   # Prefer an existing fs8 run that has few_shot_ids.json, e.g.:
-#   #   results/llm_fusion_opus55_fs8  or  results/llm_fusion_gemini_fs8
-#   python -m ndizi_asr.build_glossary \
-#     --run-dir results/llm_fusion_opus55_fs8 \
-#     --predictions results/llm_fusion_full/fusion_predictions.jsonl \
-#     -o results/glossaries/cropconcept_fs8_seed42.txt
-#   # After a NEW fs8 fusion (writes few_shot_examples.jsonl), you can omit --predictions:
-#   #   python -m ndizi_asr.build_glossary \
-#   #     --run-dir results/llm_fusion_opus55_fs8_glossary \
-#   #     -o results/glossaries/cropconcept_fs8_seed42.txt
-#   ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --editor opus-5.5 --seed 42 --no-resume \
-#     --glossary results/glossaries/cropconcept_fs8_seed42.txt \
-#     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
-#     --experiment-name llm_fusion_opus55_fs8_glossary
-#
-# Error sheet (Opus fs8 baseline → prompt tweaks; no glossary):
+# Error sheet → prompt tweak → re-run:
 #   python -m ndizi_asr.error_sheet \
 #     --predictions results/llm_fusion_opus55_fs8/fusion_predictions.jsonl
-#   # read results/llm_fusion_opus55_fs8/error_sheet.md  then edit prompts in ensemble.py
-#   ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --editor opus-5.5 --seed 42 --no-resume \
-#     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
-#     --experiment-name llm_fusion_opus55_fs8_promptv2
+#   # edit FUSION_* prompts in src/ndizi_asr/ensemble.py
+#   EDITOR=opus-5.5 EXPERIMENT=llm_fusion_opus55_fs8_promptv2 \
+#     ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --seed 42 --no-resume
+#
+# Override hyp cache path:
+#   REUSE_HYPS=/path/to/fusion_predictions.jsonl ./scripts/run_llm_fusion_smoke.sh ...
+# Disable reuse:
+#   REUSE_HYPS= ./scripts/run_llm_fusion_smoke.sh ...
 #
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -52,7 +33,10 @@ EVAL_ROOT="${EVAL_ROOT:-/local/ndizi/4.Scripts/ndizi_eval}"
 CSV="${CSV:-${EVAL_ROOT}/data/manifest_cropconcept_oromo.csv}"
 # MAX_SAMPLES=all  or empty  → full counted manifest
 MAX_SAMPLES="${MAX_SAMPLES:-}"
-EDITOR="${EDITOR:-opus}"
+EDITOR="${EDITOR:-opus-5.5}"
+
+# Default ASR hypothesis cache from the full counted run
+REUSE_HYPS="${REUSE_HYPS:-${ROOT}/results/llm_fusion_full/fusion_predictions.jsonl}"
 
 SAMPLE_ARGS=()
 if [[ -z "$MAX_SAMPLES" || "$MAX_SAMPLES" == "all" || "$MAX_SAMPLES" == "0" || "$MAX_SAMPLES" == "-1" ]]; then
@@ -60,6 +44,27 @@ if [[ -z "$MAX_SAMPLES" || "$MAX_SAMPLES" == "all" || "$MAX_SAMPLES" == "0" || "
 else
   EXPERIMENT="${EXPERIMENT:-llm_fusion_n${MAX_SAMPLES}}"
   SAMPLE_ARGS=(--max-samples "$MAX_SAMPLES")
+fi
+
+REUSE_ARGS=()
+# Auto-attach --reuse-hyps unless:
+#   - REUSE_HYPS is empty
+#   - caller already passed --reuse-hyps
+#   - this run IS the full cache rebuild (llm_fusion_full)
+has_reuse_flag=0
+for arg in "$@"; do
+  if [[ "$arg" == "--reuse-hyps" ]]; then
+    has_reuse_flag=1
+    break
+  fi
+done
+if [[ "$has_reuse_flag" -eq 0 && -n "${REUSE_HYPS}" && "$EXPERIMENT" != "llm_fusion_full" ]]; then
+  if [[ -f "$REUSE_HYPS" ]]; then
+    REUSE_ARGS=(--reuse-hyps "$REUSE_HYPS")
+    echo "Reusing ASR hyps: $REUSE_HYPS"
+  else
+    echo "WARNING: REUSE_HYPS not found ($REUSE_HYPS); will run ASR." >&2
+  fi
 fi
 
 python -m ndizi_asr.ensemble \
@@ -71,6 +76,7 @@ python -m ndizi_asr.ensemble \
   --languages om \
   --normalize ethio \
   "${SAMPLE_ARGS[@]}" \
+  "${REUSE_ARGS[@]}" \
   --output-dir results \
   --experiment-name "$EXPERIMENT" \
   "$@"
