@@ -77,17 +77,22 @@ EDITOR_ALIASES = {
     "gemini-pro": "google/gemini-2.5-pro",
     "gemini-2.5-flash": "google/gemini-2.5-flash",
     "gemini-2.5-pro": "google/gemini-2.5-pro",
+    # Common misspelling: "gemma 2.5" → Gemini 2.5 Flash (OpenRouter editor)
+    "gemma": "google/gemini-2.5-flash",
+    "gemma-2.5": "google/gemini-2.5-flash",
+    "gemma2.5": "google/gemini-2.5-flash",
 }
 
 FUSION_SYSTEM = (
-    "You are a conservative ASR fusion editor for Afaan Oromo / Amharic. "
+    "You are a conservative ASR fusion editor for African languages "
+    "(including Swahili, Afaan Oromo, and Amharic). "
     "Your job is to SELECT and lightly repair words from the given ASR hypotheses — "
     "not to paraphrase, translate, or rewrite into more fluent speech. "
     "Return ONLY the final transcript text — no quotes, labels, or commentary."
 )
 
 FUSION_USER_TEMPLATE = """Language: {language}
-Domain: Ethiopian CropConcept agronomy / hybrid wheat farmer speech (Oromo or Amharic).
+Domain: {domain}
 {few_shot_block}
 ASR hypotheses for THIS utterance (may contain errors; these are your ONLY allowed vocabulary):
 {hyp_block}
@@ -95,13 +100,27 @@ ASR hypotheses for THIS utterance (may contain errors; these are your ONLY allow
 Instructions (follow strictly):
 - Stay close to the hypotheses. Prefer copying spans from one hypothesis over inventing new wording.
 - Every content word in your output should appear in at least one hypothesis (minor spelling fixes OK: doubled letters, near-homophones already attested).
-- Do NOT introduce synonyms, discourse fillers, or "more natural" Oromo/Amharic that is absent from both hypotheses.
+- Do NOT introduce synonyms, discourse fillers, or "more natural" wording that is absent from the hypotheses.
 - When hypotheses disagree, pick the clearer/more complete reading; do not blend into a third paraphrase.
+- Preserve the original language and orthography; do not translate.
 - Preserve numbers, quantities, and named entities exactly as in the hypotheses (do not change digits).
 - Delete only clear ASR garbage / duplicated fragments; do not drop long attested phrases to "clean up" style.
 - If both hypotheses are empty, return an empty string.
 {glossary_block}
 Final transcript:"""
+
+
+def fusion_domain_for_language(language: Optional[str]) -> str:
+    lang = (language or "").strip().lower()
+    if lang in {"om", "orm", "oromo", "afaan oromo"}:
+        return (
+            "Ethiopian CropConcept agronomy / hybrid wheat farmer speech (Afaan Oromo)."
+        )
+    if lang in {"am", "amh", "amharic"}:
+        return "Ethiopian speech (Amharic); prefer domain-plausible agronomy wording when relevant."
+    if lang in {"sw", "swa", "swahili", "sw_ke"}:
+        return "Ndizi Swahili speech (conversational / media); keep natural Kiswahili orthography."
+    return "African speech transcription; keep the source language and domain."
 
 
 def resolve_editor_model(name: str) -> str:
@@ -333,6 +352,7 @@ def _build_fusion_prompt(
     )
     return FUSION_USER_TEMPLATE.format(
         language=language or "unknown",
+        domain=fusion_domain_for_language(language),
         few_shot_block=few_shot_block,
         hyp_block="\n".join(lines),
         audio_note=audio_note,

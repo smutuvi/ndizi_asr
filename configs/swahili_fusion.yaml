@@ -1,0 +1,38 @@
+# Smart fusion on Ndizi Swahili (HF Hub).
+# ASR: ndizi Whisper turbo + w2v-bert Swahili
+# Editor: Gemini 2.5 Flash (OpenRouter) — "gemma 2.5" in docs maps here
+experiment_name: llm_fusion_swahili_fs8
+
+dataset:
+  type: huggingface
+  language: swahili
+  split: test
+  audio_column: audio
+  text_column: text
+  streaming: false
+  sources:
+    - dataset_id: smutuvi/ndizi-1
+      split: test
+      language: swahili
+      max_samples: 50
+    - dataset_id: smutuvi/ndizi-1-2025
+      split: test
+      language: swahili
+      max_samples: 50
+
+openrouter:
+  base_url: https://openrouter.ai/api/v1
+  timeout_seconds: 120
+  max_retries: 5
+  retry_backoff_seconds: 2.0
+  temperature: 0.0
+  max_tokens: 1024
+
+normalization:
+  mode: default
+  lowercase: true
+  strip_punctuation: true
+  collapse_whitespace: true
+
+output_dir: results
+resume: true

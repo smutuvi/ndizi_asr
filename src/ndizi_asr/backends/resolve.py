@@ -8,10 +8,12 @@ LOCAL_WHISPER_PREFIXES = (
     "Sunbird/asr-whisper",
     "openai/whisper-",
     "distil-whisper/",
+    "smutuvi/ndizi-whisper",
 )
 
 LOCAL_CTC_PREFIXES = (
     "badrex/Ethio-ASR",
+    "badrex/w2v-bert",
     "facebook/mms-1b",
     "facebook/wav2vec2",
 )
@@ -42,6 +44,11 @@ MODEL_ALIASES: dict[str, str] = {
     "ethio-asr-multilingual-1b": "badrex/Ethio-ASR-multilingual-1B",
     "sunbird-whisper-salt": "Sunbird/asr-whisper-large-v3-salt",
     "sunbird-whisper-51": "Sunbird/asr-whisper-51-african-languages",
+    # Swahili / Ndizi
+    "ndizi-whisper-turbo": "smutuvi/ndizi-whisper-large-v3-turbo-optimized",
+    "ndizi-whisper": "smutuvi/ndizi-whisper-large-v3-turbo-optimized",
+    "w2v-bert-swahili": "badrex/w2v-bert-2.0-swahili-asr",
+    "swahili-asr": "badrex/w2v-bert-2.0-swahili-asr",
     "omnilingualasr": "omniASR_LLM_7B",
     "omnilingualasr-ctc": "omniASR_CTC_1B",
 }
@@ -52,6 +59,8 @@ LANGUAGE_FILTERS: dict[str, str] = {
     "badrex/Ethio-ASR-oromo": "om",
     "ethio-asr-amharic": "am",
     "ethio-asr-oromo": "om",
+    "badrex/w2v-bert-2.0-swahili-asr": "sw",
+    "w2v-bert-swahili": "sw",
 }
 
 MODEL_GROUPS: dict[str, list[str]] = {
@@ -67,9 +76,13 @@ MODEL_GROUPS: dict[str, list[str]] = {
         "ethio-asr-multilingual-1b",
         "sunbird-whisper-51",
     ],
+    "swahili": [
+        "ndizi-whisper-turbo",
+        "w2v-bert-swahili",
+    ],
     "w2v-bert": ["ethio-asr-amharic", "ethio-asr-oromo"],
     "w2v-bert-family": ["ethio-asr-amharic", "ethio-asr-oromo"],
-    "whisper-family": ["whisper", "sunbird-whisper-salt", "sunbird-whisper-51"],
+    "whisper-family": ["whisper", "sunbird-whisper-salt", "sunbird-whisper-51", "ndizi-whisper-turbo"],
     "local-ethio": [
         "omnilingualasr-ctc",
         "ethio-asr-amharic",
@@ -121,14 +134,24 @@ def _is_gemma_model(model_id: str) -> bool:
 
 
 def _is_whisper_model(model_id: str) -> bool:
-    return model_id.startswith(LOCAL_WHISPER_PREFIXES) or "/whisper" in model_id.lower()
+    mid = model_id.lower()
+    return (
+        model_id.startswith(LOCAL_WHISPER_PREFIXES)
+        or "/whisper" in mid
+        or "ndizi-whisper" in mid
+    )
 
 
 def _is_ctc_model(model_id: str) -> bool:
     if model_id.startswith(LOCAL_CTC_PREFIXES):
         return True
     mid = model_id.lower()
-    return "ethio-asr" in mid or "/wav2vec2" in mid or "/mms-" in mid
+    return (
+        "ethio-asr" in mid
+        or "/wav2vec2" in mid
+        or "/mms-" in mid
+        or "w2v-bert" in mid
+    )
 
 
 def _is_omnilingual_card(model_id: str) -> bool:
