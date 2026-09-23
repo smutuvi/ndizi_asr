@@ -531,10 +531,19 @@ def run_fusion(
         hyps = dict(base["hypotheses"])
         errors = dict(base["asr_errors"])
         for m in asr_models:
-            if m not in hyps:
-                text, err = pool.transcribe(m, sample)
-                hyps[m] = text
-                errors[m] = err
+            existing = hyps.get(m)
+            prior_err = errors.get(m)
+            # Re-run if missing, or previously failed/empty (so a bad Gemini cache can recover)
+            need = m not in hyps or (
+                prior_err and not str(existing or "").strip()
+            )
+            if not need:
+                continue
+            text, err = pool.transcribe(m, sample)
+            hyps[m] = text
+            errors[m] = err
+            if err and not str(text or "").strip():
+                logger.warning("ASR failed for %s model=%s: %s", sid, m, err[:300])
         base["hypotheses"] = hyps
         base["asr_errors"] = errors
         base["_sample"] = sample  # transient; stripped before write
