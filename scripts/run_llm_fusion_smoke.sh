@@ -11,9 +11,9 @@
 #     --from-file results/llm_fusion_full/fusion_predictions.jsonl \
 #     -o results/llm_fusion_full3/fusion_predictions.jsonl
 #
-# 3-model Opus few-shot (auto-reuses full3 when present):
-#   EXPERIMENT=llm_fusion_opus55_fs8_sunbird \
-#     ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --seed 42 --no-resume
+# Retrieved few-shot (TF-IDF on ASR hyps; same seed-42 eval IDs; uses full3 cache):
+#   EXPERIMENT=llm_fusion_opus55_fs8_sunbird_ret \
+#     ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --few-shot-retrieve --seed 42 --no-resume
 #
 # Override hyp cache / disable reuse:
 #   REUSE_HYPS=/path/to/fusion_predictions.jsonl ./scripts/run_llm_fusion_smoke.sh ...

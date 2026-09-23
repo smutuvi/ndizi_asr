@@ -14,9 +14,12 @@ import argparse
 import csv
 import json
 import logging
+import math
 import os
 import random
+import re
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -214,6 +217,79 @@ class _ASRPool:
             return "", str(exc)
 
 
+def _hyp_blob(rec: dict[str, Any], asr_models: list[str]) -> str:
+    hyps = rec.get("hypotheses") or {}
+    parts = [str(hyps.get(m) or "") for m in asr_models]
+    # Fall back to any hyp keys if model list order differs
+    if not any(parts):
+        parts = [str(v or "") for v in hyps.values()]
+    return " ".join(parts)
+
+
+def _tokenize_ret(text: str) -> list[str]:
+    return re.findall(r"[^\W\d_]+|\d+", (text or "").lower(), flags=re.UNICODE)
+
+
+def _tfidf_matrix(docs: list[str]) -> tuple[list[dict[str, float]], dict[str, float]]:
+    """Lightweight TF-IDF (no sklearn). Returns per-doc sparse vectors + idf."""
+    tokenized = [_tokenize_ret(d) for d in docs]
+    df: dict[str, int] = {}
+    for toks in tokenized:
+        for t in set(toks):
+            df[t] = df.get(t, 0) + 1
+    n = max(len(docs), 1)
+    idf = {t: math.log((n + 1) / (df_t + 1)) + 1.0 for t, df_t in df.items()}
+    vectors: list[dict[str, float]] = []
+    for toks in tokenized:
+        tf: dict[str, float] = {}
+        if not toks:
+            vectors.append({})
+            continue
+        counts = Counter(toks)
+        length = float(len(toks))
+        for t, c in counts.items():
+            tf[t] = (c / length) * idf.get(t, 0.0)
+        # L2 normalize
+        norm = math.sqrt(sum(v * v for v in tf.values())) or 1.0
+        vectors.append({t: v / norm for t, v in tf.items()})
+    return vectors, idf
+
+
+def _cosine_sparse(a: dict[str, float], b: dict[str, float]) -> float:
+    if not a or not b:
+        return 0.0
+    if len(a) > len(b):
+        a, b = b, a
+    return sum(v * b.get(t, 0.0) for t, v in a.items())
+
+
+def retrieve_few_shot(
+    records: list[dict[str, Any]],
+    *,
+    query_idx: int,
+    asr_models: list[str],
+    k: int,
+    candidate_indices: Optional[list[int]] = None,
+) -> list[dict[str, Any]]:
+    """Return up to k records most similar to query by ASR-hyp TF-IDF cosine."""
+    if k <= 0:
+        return []
+    idxs = candidate_indices if candidate_indices is not None else list(range(len(records)))
+    idxs = [j for j in idxs if j != query_idx]
+    if not idxs:
+        return []
+    docs = [_hyp_blob(records[j], asr_models) for j in idxs]
+    q_doc = _hyp_blob(records[query_idx], asr_models)
+    vectors, _ = _tfidf_matrix(docs + [q_doc])
+    q_vec = vectors[-1]
+    scored = [
+        (_cosine_sparse(q_vec, vectors[i]), idxs[i])
+        for i in range(len(idxs))
+    ]
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    return [records[j] for _, j in scored[:k]]
+
+
 def _build_few_shot_block(examples: list[dict[str, Any]], asr_models: list[str]) -> str:
     if not examples:
         return ""
@@ -290,6 +366,7 @@ def run_fusion(
     resume: bool = True,
     few_shot: int = 0,
     seed: int = 42,
+    few_shot_retrieve: bool = False,
     use_audio: bool = False,
     reuse_hyps: Optional[Path] = None,
     thinking: bool = False,
@@ -305,6 +382,8 @@ def run_fusion(
     mode_bits = []
     if few_shot > 0:
         mode_bits.append(f"fs{few_shot}")
+        if few_shot_retrieve:
+            mode_bits.append("ret")
     if use_audio:
         mode_bits.append("audio")
     if thinking:
@@ -422,14 +501,20 @@ def run_fusion(
     eval_indices = [i for i in range(len(records)) if i not in shot_idx]
 
     few_shot_examples = [records[i] for i in order[:n_shot]] if n_shot else []
-    few_shot_block = _build_few_shot_block(few_shot_examples, asr_models)
+    few_shot_block = (
+        ""
+        if few_shot_retrieve
+        else _build_few_shot_block(few_shot_examples, asr_models)
+    )
+    retrieve_map: dict[str, list[str]] = {}
 
     if n_shot:
         logger.info(
-            "Few-shot: %d examples, %d eval utterances (seed=%d)",
+            "Few-shot: %d examples, %d eval utterances (seed=%d, retrieve=%s)",
             n_shot,
             len(eval_indices),
             seed,
+            few_shot_retrieve,
         )
         shot_ids = [records[i]["sample_id"] for i in order[:n_shot]]
         eval_ids = [records[i]["sample_id"] for i in eval_indices]
@@ -438,32 +523,41 @@ def run_fusion(
                 {
                     "seed": seed,
                     "few_shot": n_shot,
+                    "retrieve": few_shot_retrieve,
                     "shot_ids": shot_ids,
                     "eval_ids": eval_ids,
+                    "note": (
+                        "With retrieve=true, shot_ids define the held-out eval split only; "
+                        "each eval item gets its own top-N neighbors from the other 29 "
+                        "(leave-one-out). Slightly more optimistic than fixed global shots."
+                        if few_shot_retrieve
+                        else "Fixed global few-shot set; eval excludes shot_ids."
+                    ),
                 },
                 indent=2,
             ),
             encoding="utf-8",
         )
-        # Persist shot rows (refs + hyps) so glossary can be built without touching eval gold
-        shot_path = output_dir / "few_shot_examples.jsonl"
-        with shot_path.open("w", encoding="utf-8") as f:
-            for i in order[:n_shot]:
-                rec = records[i]
-                f.write(
-                    json.dumps(
-                        {
-                            "sample_id": rec["sample_id"],
-                            "language": rec.get("language"),
-                            "reference": rec.get("reference"),
-                            "hypotheses": rec.get("hypotheses"),
-                            "split": "few_shot",
-                        },
-                        ensure_ascii=False,
+        # Persist fixed shot rows when not retrieving (glossary / audit)
+        if not few_shot_retrieve:
+            shot_path = output_dir / "few_shot_examples.jsonl"
+            with shot_path.open("w", encoding="utf-8") as f:
+                for i in order[:n_shot]:
+                    rec = records[i]
+                    f.write(
+                        json.dumps(
+                            {
+                                "sample_id": rec["sample_id"],
+                                "language": rec.get("language"),
+                                "reference": rec.get("reference"),
+                                "hypotheses": rec.get("hypotheses"),
+                                "split": "few_shot",
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
                     )
-                    + "\n"
-                )
-        logger.info("Wrote few-shot examples → %s", shot_path)
+            logger.info("Wrote few-shot examples → %s", shot_path)
 
     by_system: dict[str, list[dict[str, Any]]] = {m: [] for m in asr_models}
     by_system[fusion_name] = []
@@ -489,6 +583,7 @@ def run_fusion(
             prior
             and prior.get("fusion_model") == editor_model
             and bool(prior.get("few_shot")) == (n_shot > 0)
+            and bool(prior.get("few_shot_retrieve")) == few_shot_retrieve
             and bool(prior.get("use_audio")) == use_audio
             and bool(prior.get("thinking")) == thinking
             and prior.get("thinking_effort", "high") == thinking_effort
@@ -497,11 +592,23 @@ def run_fusion(
         if mode_ok:
             row = prior
         else:
+            local_fs_block = few_shot_block
+            local_shot_ids: list[str] = []
+            if n_shot and few_shot_retrieve:
+                retrieved = retrieve_few_shot(
+                    records,
+                    query_idx=i,
+                    asr_models=asr_models,
+                    k=n_shot,
+                )
+                local_shot_ids = [str(r["sample_id"]) for r in retrieved]
+                retrieve_map[str(sid)] = local_shot_ids
+                local_fs_block = _build_few_shot_block(retrieved, asr_models)
             prompt = _build_fusion_prompt(
                 language=sample.language or sample.language_config,
                 hyps=rec["hypotheses"],
                 glossary=glossary,
-                few_shot_block=few_shot_block,
+                few_shot_block=local_fs_block,
                 with_audio=use_audio,
             )
             if use_audio:
@@ -559,6 +666,8 @@ def run_fusion(
                 "asr_errors": rec.get("asr_errors"),
                 "fusion_model": editor_model,
                 "few_shot": n_shot,
+                "few_shot_retrieve": few_shot_retrieve,
+                "few_shot_ids": local_shot_ids if few_shot_retrieve else None,
                 "use_audio": use_audio,
                 "thinking": thinking,
                 "thinking_effort": thinking_effort if thinking else None,
@@ -594,11 +703,17 @@ def run_fusion(
 
     flush()
 
+    if retrieve_map:
+        ret_path = output_dir / "few_shot_retrieve_map.json"
+        ret_path.write_text(json.dumps(retrieve_map, indent=2, ensure_ascii=False), encoding="utf-8")
+        logger.info("Wrote per-utt retrieval map → %s", ret_path)
+
     table_rows: list[dict[str, Any]] = []
     metrics_out: dict[str, Any] = {
         "created_at": _utc_now(),
         "editor": editor_model,
         "few_shot": n_shot,
+        "few_shot_retrieve": few_shot_retrieve,
         "use_audio": use_audio,
         "thinking": thinking,
         "thinking_effort": thinking_effort if thinking else None,
@@ -627,6 +742,8 @@ def run_fusion(
         title += f" (eval n={len(eval_indices)}"
         if n_shot:
             title += f", few-shot={n_shot}"
+            if few_shot_retrieve:
+                title += "+retrieve"
         if use_audio:
             title += ", audio"
         if thinking:
@@ -702,6 +819,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use N gold examples in the prompt; score only the held-out utterances",
     )
     p.add_argument("--seed", type=int, default=42, help="RNG seed for few-shot split")
+    p.add_argument(
+        "--few-shot-retrieve",
+        action="store_true",
+        help="Per-eval-utt: retrieve top-N few-shot examples by ASR-hyp TF-IDF "
+        "(leave-one-out from the other clips; same seed still defines who is scored)",
+    )
     p.add_argument(
         "--audio",
         action="store_true",
@@ -816,7 +939,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     print("Smart fusion = dual ASR hypotheses + LLM language editor")
     print(f"  ASR:      {expand_model_groups(args.asr_models)}")
     print(f"  Editor:   {editor}")
-    print(f"  Few-shot: {args.few_shot} (seed={args.seed})")
+    print(f"  Few-shot: {args.few_shot} (seed={args.seed}, retrieve={args.few_shot_retrieve})")
     print(f"  Audio:    {args.audio}")
     print(f"  Thinking: {args.thinking}" + (f" (effort={args.thinking_effort})" if args.thinking else ""))
     print(f"  Out:      {out}")
@@ -834,6 +957,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         resume=resume,
         few_shot=args.few_shot,
         seed=args.seed,
+        few_shot_retrieve=args.few_shot_retrieve,
         use_audio=args.audio,
         reuse_hyps=args.reuse_hyps,
         thinking=args.thinking,
