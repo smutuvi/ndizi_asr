@@ -107,12 +107,17 @@ def build_reasoning_config(
     thinking: bool,
     effort: str = "high",
     exclude: bool = True,
+    editor_model: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """OpenRouter unified reasoning / thinking parameter."""
-    if not thinking:
-        return None
-    # exclude=True: keep final transcript clean (don't return thinking in content)
-    return {"enabled": True, "effort": effort, "exclude": exclude}
+    mid = (editor_model or "").lower()
+    # GPT-6 Luna/Sol often need an explicit effort; default to none for clean transcripts
+    # unless the user asked for --thinking.
+    if thinking:
+        return {"enabled": True, "effort": effort, "exclude": exclude}
+    if "gpt-6" in mid or mid.startswith("openai/gpt-6"):
+        return {"effort": "none", "exclude": True}
+    return None
 
 
 def _utc_now() -> str:
@@ -288,7 +293,9 @@ def run_fusion(
 ) -> dict[str, Any]:
     asr_models = expand_model_groups(asr_models)
     editor_model = resolve_editor_model(editor_model)
-    reasoning = build_reasoning_config(thinking=thinking, effort=thinking_effort)
+    reasoning = build_reasoning_config(
+        thinking=thinking, effort=thinking_effort, editor_model=editor_model
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     mode_bits = []
@@ -324,16 +331,23 @@ def run_fusion(
 
     pool = _ASRPool(device=device)
     or_cfg = openrouter
-    if thinking and or_cfg.max_tokens < 4096:
+    is_gpt6 = "gpt-6" in editor_model.lower()
+    # GPT-6 defaults to reasoning; 1024 often gets burned on hidden tokens → empty content.
+    need_more_tokens = (thinking or is_gpt6) and or_cfg.max_tokens < 4096
+    if need_more_tokens or (thinking and or_cfg.timeout_seconds < 300.0):
         or_cfg = OpenRouterConfig(
             base_url=openrouter.base_url,
-            timeout_seconds=max(openrouter.timeout_seconds, 300.0),
+            timeout_seconds=max(
+                openrouter.timeout_seconds, 300.0 if thinking else openrouter.timeout_seconds
+            ),
             max_retries=openrouter.max_retries,
             retry_backoff_seconds=openrouter.retry_backoff_seconds,
             temperature=openrouter.temperature,
-            max_tokens=4096,
+            max_tokens=max(openrouter.max_tokens, 4096 if need_more_tokens else openrouter.max_tokens),
         )
     llm = OpenRouterASRClient(api_key=api_key, config=or_cfg)
+    if reasoning:
+        logger.info("OpenRouter reasoning config for %s: %s", editor_model, reasoning)
 
     # Materialize samples (CropConcept counted set is small).
     samples = list(build_loader(dataset_cfg).iter_samples())
@@ -465,6 +479,32 @@ def run_fusion(
                     system=FUSION_SYSTEM,
                     reasoning=reasoning,
                 )
+            fusion_text = (fused.text or "").strip()
+            # Strip accidental quotes / labels some models prepend
+            if fusion_text.startswith("Final transcript:"):
+                fusion_text = fusion_text.split(":", 1)[1].strip()
+            fusion_text = fusion_text.strip().strip('"').strip("'")
+            fusion_error = fused.error
+            if not fusion_text and not fusion_error:
+                fusion_error = "empty_fusion_output"
+                raw = fused.raw_response or {}
+                choice0 = (raw.get("choices") or [{}])[0]
+                usage = raw.get("usage") or {}
+                logger.warning(
+                    "Empty fusion for %s (model=%s). finish_reason=%s "
+                    "usage=%s message_keys=%s",
+                    sid,
+                    editor_model,
+                    choice0.get("finish_reason"),
+                    {
+                        "completion_tokens": usage.get("completion_tokens"),
+                        "reasoning_tokens": (usage.get("completion_tokens_details") or {}).get(
+                            "reasoning_tokens"
+                        )
+                        or usage.get("reasoning_tokens"),
+                    },
+                    list((choice0.get("message") or {}).keys()),
+                )
             row = {
                 "sample_id": sid,
                 "dataset_id": rec.get("dataset_id"),
@@ -480,8 +520,8 @@ def run_fusion(
                 "thinking_effort": thinking_effort if thinking else None,
                 "seed": seed,
                 "split": "eval",
-                "fusion": fused.text,
-                "fusion_error": fused.error,
+                "fusion": fusion_text,
+                "fusion_error": fusion_error,
                 "fusion_latency_seconds": fused.latency_seconds,
             }
             buffer.append(row)

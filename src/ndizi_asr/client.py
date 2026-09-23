@@ -258,14 +258,36 @@ class OpenRouterASRClient:
             return ""
         message = choices[0].get("message") or {}
         content = message.get("content")
-        if isinstance(content, str):
-            return content.strip()
-        if isinstance(content, list):
-            parts: list[str] = []
-            for item in content:
-                if isinstance(item, dict) and item.get("type") == "text":
-                    parts.append(str(item.get("text") or ""))
-                elif isinstance(item, str):
-                    parts.append(item)
-            return " ".join(p.strip() for p in parts if p).strip()
+
+        def _from_content(value: Any) -> str:
+            if value is None:
+                return ""
+            if isinstance(value, str):
+                return value.strip()
+            if isinstance(value, list):
+                parts: list[str] = []
+                for item in value:
+                    if isinstance(item, str):
+                        parts.append(item)
+                    elif isinstance(item, dict):
+                        if item.get("type") in {"text", "output_text"}:
+                            parts.append(str(item.get("text") or ""))
+                        elif "text" in item:
+                            parts.append(str(item.get("text") or ""))
+                return " ".join(p.strip() for p in parts if p).strip()
+            return str(value).strip()
+
+        text = _from_content(content)
+        if text:
+            return text
+        # Some GPT-6 / OpenRouter shapes put usable text elsewhere
+        for key in ("reasoning", "reasoning_content", "refusal"):
+            alt = _from_content(message.get(key))
+            if alt and key != "refusal":
+                return alt
+        # OpenRouter sometimes mirrors assistant text at top-level
+        for key in ("output_text", "text"):
+            alt = _from_content(data.get(key))
+            if alt:
+                return alt
         return ""
