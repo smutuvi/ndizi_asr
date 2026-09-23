@@ -43,10 +43,16 @@ DEFAULT_ASR_MODELS = (
 
 EDITOR_ALIASES = {
     "opus": "anthropic/claude-opus-4.5",
-    "opus-5": "anthropic/claude-opus-4.5",
-    "opus5": "anthropic/claude-opus-4.5",
+    "opus-4.5": "anthropic/claude-opus-4.5",
+    "opus4.5": "anthropic/claude-opus-4.5",
     "claude-opus": "anthropic/claude-opus-4.5",
     "claude-opus-4.5": "anthropic/claude-opus-4.5",
+    # Claude Opus 5.5 (OpenRouter)
+    "opus-5.5": "anthropic/claude-opus-5.5",
+    "opus5.5": "anthropic/claude-opus-5.5",
+    "opus-5": "anthropic/claude-opus-5.5",
+    "opus5": "anthropic/claude-opus-5.5",
+    "claude-opus-5.5": "anthropic/claude-opus-5.5",
     "sonnet": "anthropic/claude-sonnet-4.5",
     "gpt-4.1": "openai/gpt-4.1",
     "gpt4.1": "openai/gpt-4.1",
