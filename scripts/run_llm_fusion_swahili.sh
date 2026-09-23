@@ -3,7 +3,8 @@
 #   ASR: smutuvi/ndizi-whisper-large-v3-turbo-optimized
 #        badrex/w2v-bert-2.0-swahili-asr
 #   Editor: Gemini 2.5 Flash (OpenRouter)  [alias: gemini / gemma-2.5]
-#   Data: 50 clips from smutuvi/ndizi-1 + 50 from smutuvi/ndizi-1-2025
+#   Data: 50 streamed test clips from smutuvi/ndizi-1 + 50 from smutuvi/ndizi-1-2025
+#         (configs/swahili_fusion.yaml uses streaming: true — no full download)
 #
 # First run (build hyps + fuse; ~100 utts):
 #   ./scripts/run_llm_fusion_swahili.sh

@@ -162,8 +162,13 @@ def _load_hf_split(
         ds = load_dataset(dataset_id, **kwargs)
 
     cols = list(ds.column_names) if hasattr(ds, "column_names") else []
-    if "audio" in cols and not streaming:
-        ds = ds.cast_column("audio", Audio(sampling_rate=16000))
+    # Prefer 16 kHz decode for ASR; works on map-style and most streaming IterableDatasets
+    if "audio" in cols:
+        try:
+            ds = ds.cast_column("audio", Audio(sampling_rate=16000))
+        except Exception:
+            # Streaming backends occasionally reject cast; extract_audio still handles decode
+            pass
     return ds
 
 
