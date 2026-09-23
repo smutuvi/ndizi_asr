@@ -408,18 +408,39 @@ def run_fusion(
             len(eval_indices),
             seed,
         )
+        shot_ids = [records[i]["sample_id"] for i in order[:n_shot]]
+        eval_ids = [records[i]["sample_id"] for i in eval_indices]
         (output_dir / "few_shot_ids.json").write_text(
             json.dumps(
                 {
                     "seed": seed,
                     "few_shot": n_shot,
-                    "shot_ids": [records[i]["sample_id"] for i in order[:n_shot]],
-                    "eval_ids": [records[i]["sample_id"] for i in eval_indices],
+                    "shot_ids": shot_ids,
+                    "eval_ids": eval_ids,
                 },
                 indent=2,
             ),
             encoding="utf-8",
         )
+        # Persist shot rows (refs + hyps) so glossary can be built without touching eval gold
+        shot_path = output_dir / "few_shot_examples.jsonl"
+        with shot_path.open("w", encoding="utf-8") as f:
+            for i in order[:n_shot]:
+                rec = records[i]
+                f.write(
+                    json.dumps(
+                        {
+                            "sample_id": rec["sample_id"],
+                            "language": rec.get("language"),
+                            "reference": rec.get("reference"),
+                            "hypotheses": rec.get("hypotheses"),
+                            "split": "few_shot",
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        logger.info("Wrote few-shot examples → %s", shot_path)
 
     by_system: dict[str, list[dict[str, Any]]] = {m: [] for m in asr_models}
     by_system[fusion_name] = []

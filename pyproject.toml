@@ -58,6 +58,7 @@ all = [
 ndizi-asr = "ndizi_asr.cli:main"
 ndizi-asr-train = "ndizi_asr.train:main"
 ndizi-asr-fuse = "ndizi_asr.ensemble:main"
+ndizi-asr-glossary = "ndizi_asr.build_glossary:main"
 # Back-compat
 gemini-asr-bench = "ndizi_asr.cli:main"
 

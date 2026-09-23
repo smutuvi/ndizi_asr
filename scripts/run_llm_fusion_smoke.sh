@@ -19,6 +19,22 @@
 #     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
 #     --experiment-name llm_fusion_fs8_audio
 #
+# Glossary from few-shot only (no eval pollution), then Opus A/B:
+#   # Prefer an existing fs8 run that has few_shot_ids.json, e.g.:
+#   #   results/llm_fusion_opus55_fs8  or  results/llm_fusion_gemini_fs8
+#   python -m ndizi_asr.build_glossary \
+#     --run-dir results/llm_fusion_opus55_fs8 \
+#     --predictions results/llm_fusion_full/fusion_predictions.jsonl \
+#     -o results/glossaries/cropconcept_fs8_seed42.txt
+#   # After a NEW fs8 fusion (writes few_shot_examples.jsonl), you can omit --predictions:
+#   #   python -m ndizi_asr.build_glossary \
+#   #     --run-dir results/llm_fusion_opus55_fs8_glossary \
+#   #     -o results/glossaries/cropconcept_fs8_seed42.txt
+#   ./scripts/run_llm_fusion_smoke.sh --few-shot 8 --editor opus-5.5 --seed 42 --no-resume \
+#     --glossary results/glossaries/cropconcept_fs8_seed42.txt \
+#     --reuse-hyps results/llm_fusion_full/fusion_predictions.jsonl \
+#     --experiment-name llm_fusion_opus55_fs8_glossary
+#
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
