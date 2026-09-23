@@ -26,7 +26,7 @@ export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 EDITOR="${EDITOR:-gemini}"
 EXPERIMENT="${EXPERIMENT:-llm_fusion_swahili_full}"
 CONFIG="${CONFIG:-${ROOT}/configs/swahili_fusion.yaml}"
-ASR_MODELS="${ASR_MODELS:-ndizi-whisper-turbo w2v-bert-swahili}"
+ASR_MODELS="${ASR_MODELS:-ndizi-whisper-turbo w2v-bert-swahili sunbird-whisper-51}"
 
 REUSE_ARGS=()
 if [[ -n "${REUSE_HYPS:-}" ]]; then
