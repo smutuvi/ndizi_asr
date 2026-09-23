@@ -1,6 +1,9 @@
 # Smart fusion on Ndizi Swahili (HF Hub).
 # ASR: ndizi Whisper turbo + w2v-bert Swahili
 # Editor: Gemini 2.5 Flash (OpenRouter) — "gemma 2.5" in docs maps here
+#
+# streaming: true → only the test split is fetched on demand (no full dataset
+# materialization); max_samples stops after 50 rows per source.
 experiment_name: llm_fusion_swahili_fs8
 
 dataset:
@@ -9,7 +12,7 @@ dataset:
   split: test
   audio_column: audio
   text_column: text
-  streaming: false
+  streaming: true
   sources:
     - dataset_id: smutuvi/ndizi-1
       split: test
