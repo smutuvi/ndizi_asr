@@ -27,6 +27,8 @@ data/
 results/**
 !results/.gitkeep
 !results/summaries/.gitkeep
+outputs/
+artifacts/
 
 # IDE / OS
 .DS_Store

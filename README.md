@@ -12,7 +12,7 @@ Formerly `gemini_asr_bench` / `ndizi_mlops_gemini`, now also absorbing [ndizi_ev
 | **Eval — local** | Whisper / Sunbird, Gemma 4 E2B, **Ethio CTC (w2v-bert)**, **Meta Omnilingual ASR** |
 | **Datasets** | FLEURS, WaxalNLP, Horn-ASR, Ndizi Hub sets, Arabic eval, **CSV manifests**, **CropConcept** |
 | **Scoring** | WER/CER; `default` or **`ethio`** (Geʼez) normalize |
-| **Train** | Scaffold CLI (`ndizi-asr-train`) for Whisper/CTC fine-tunes |
+| **Train** | Whisper / Sunbird **LoRA** (`ndizi-asr-train`) on Ndizi Hub sets; CTC still scaffolded |
 
 ## Setup
 
@@ -76,14 +76,32 @@ python -m ndizi_asr.cli \
 
 CropConcept YAML: `configs/cropconcept_oromo.yaml` (edit absolute paths).
 
-## Training (scaffold)
+## Training (Whisper / Sunbird LoRA)
+
+Recommended first adapter: **Sunbird Whisper-51** on `smutuvi/ndizi-1` + `smutuvi/ndizi-1-2025` (Swahili farm interviews).
 
 ```bash
-ndizi-asr-train --config configs/train_whisper_scaffold.yaml --dry-run
-# writes outputs/<experiment>/train_plan.json
+pip install -e ".[train]"
+
+# Plan only
+ndizi-asr-train --config configs/train_sunbird51_ndizi_lora.yaml --dry-run
+
+# Full LoRA fine-tune (GPU)
+ndizi-asr-train --config configs/train_sunbird51_ndizi_lora.yaml
+# → outputs/sunbird51_ndizi_lora/
 ```
 
-Full `Seq2SeqTrainer` / CTC Trainer loops are stubs — port existing Ndizi fine-tune notebooks into `ndizi_asr.train.whisper_trainer` / `ctc_trainer`.
+Then evaluate the adapter:
+
+```bash
+python -m ndizi_asr.cli \
+  --model hf:outputs/sunbird51_ndizi_lora \
+  --dataset smutuvi/ndizi-1 smutuvi/ndizi-1-2025 \
+  --max-samples 100 \
+  --experiment-name sunbird51_ndizi_lora_eval
+```
+
+Scaffold / other Whisper bases: `configs/train_whisper_scaffold.yaml`.
 
 ## Outputs
 

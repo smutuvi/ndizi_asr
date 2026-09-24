@@ -41,6 +41,9 @@ train = [
   "accelerate>=0.27.0",
   "datasets>=2.19.0",
   "evaluate>=0.4.1",
+  "peft>=0.11.0",
+  "librosa>=0.10.0",
+  "jiwer>=3.0.0",
 ]
 all = [
   "torch>=2.1.0",
