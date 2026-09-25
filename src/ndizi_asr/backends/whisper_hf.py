@@ -16,6 +16,42 @@ SAMPLE_RATE = 16000
 # Whisper encoder receptive field (~30s). Chunk longer audio with overlap-free joins.
 MAX_SECONDS = 30.0
 
+# Friendly / dataset labels → OpenAI Whisper language names (not Sunbird ISO-639-3).
+_OPENAI_WHISPER_LANG: dict[str, str] = {
+    "swahili": "swahili",
+    "sw": "swahili",
+    "swa": "swahili",
+    "sw_ke": "swahili",
+    "amharic": "amharic",
+    "am": "amharic",
+    "amh": "amharic",
+    "am_et": "amharic",
+    "hausa": "hausa",
+    "ha": "hausa",
+    "hau": "hausa",
+    "ha_ng": "hausa",
+    "english": "english",
+    "en": "english",
+    "eng": "english",
+}
+
+
+def _is_sunbird_whisper(model_id: str) -> bool:
+    mid = model_id.lower()
+    return "sunbird" in mid or "asr-whisper-51" in mid
+
+
+def _openai_whisper_language(language: Optional[str], language_config: Optional[str]) -> Optional[str]:
+    for candidate in (language, language_config):
+        if not candidate:
+            continue
+        key = str(candidate).strip().lower()
+        if key in _OPENAI_WHISPER_LANG:
+            return _OPENAI_WHISPER_LANG[key]
+        # Pass through English names the tokenizer already knows
+        return key
+    return None
+
 
 def _hf_token() -> Optional[str]:
     for key in ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
@@ -146,8 +182,28 @@ class HuggingFaceWhisperClient:
             raise
 
         self.model.eval()
+        self._sunbird = _is_sunbird_whisper(model_id)
         self._transcribe_tok = self.processor.tokenizer.convert_tokens_to_ids("<|transcribe|>")
         self._notimestamps_tok = self.processor.tokenizer.convert_tokens_to_ids("<|notimestamps|>")
+
+    def _forced_decoder_ids(
+        self,
+        language: Optional[str],
+        language_config: Optional[str],
+    ) -> list[tuple[int, int]]:
+        if self._sunbird:
+            lang_code = resolve_sunbird_language_code(language, language_config)
+            lang_tok = LANGUAGE_TOKENS_WHISPER[lang_code]
+            return [
+                (1, lang_tok),
+                (2, self._transcribe_tok),
+                (3, self._notimestamps_tok),
+            ]
+        # openai/whisper-* and fine-tunes (e.g. ndizi-whisper-large-v3-turbo-*)
+        lang = _openai_whisper_language(language, language_config) or "swahili"
+        return list(
+            self.processor.get_decoder_prompt_ids(language=lang, task="transcribe")
+        )
 
     def transcribe_array(
         self,
@@ -159,14 +215,13 @@ class HuggingFaceWhisperClient:
     ) -> TranscriptionResult:
         started = time.perf_counter()
         try:
-            lang_code = resolve_sunbird_language_code(language, language_config)
-            lang_tok = LANGUAGE_TOKENS_WHISPER[lang_code]
+            forced = self._forced_decoder_ids(language, language_config)
             audio = _resample_linear(np.asarray(audio_array), int(sampling_rate), SAMPLE_RATE)
             if audio.ndim > 1:
                 audio = audio.mean(axis=-1)
             texts: list[str] = []
             for chunk in _chunk_audio(audio, SAMPLE_RATE):
-                texts.append(self._transcribe_chunk(chunk, lang_tok))
+                texts.append(self._transcribe_chunk(chunk, forced))
             text = " ".join(t.strip() for t in texts if t.strip()).strip()
             return TranscriptionResult(
                 text=text,
@@ -182,7 +237,7 @@ class HuggingFaceWhisperClient:
                 error=str(exc),
             )
 
-    def _transcribe_chunk(self, audio: np.ndarray, lang_tok: int) -> str:
+    def _transcribe_chunk(self, audio: np.ndarray, forced_decoder_ids: list[tuple[int, int]]) -> str:
         torch = self.torch
         inputs = self.processor(
             audio,
@@ -191,11 +246,6 @@ class HuggingFaceWhisperClient:
             return_tensors="pt",
         )
         input_features = inputs.input_features.to(self.device, dtype=self.model.dtype)
-        forced_decoder_ids = [
-            (1, lang_tok),
-            (2, self._transcribe_tok),
-            (3, self._notimestamps_tok),
-        ]
         with torch.inference_mode():
             predicted_ids = self.model.generate(
                 input_features,

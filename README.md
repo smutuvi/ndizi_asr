@@ -101,6 +101,17 @@ python -m ndizi_asr.cli \
   --experiment-name sunbird51_ndizi_lora_eval
 ```
 
+Hub fine-tune (Whisper large-v3-turbo optimized):
+
+```bash
+python -m ndizi_asr.cli --config configs/ndizi_whisper_turbo_optimized.yaml
+# or:
+python -m ndizi_asr.cli \
+  --model smutuvi/ndizi-whisper-large-v3-turbo-optimized \
+  --dataset smutuvi/ndizi-1 smutuvi/ndizi-1-2025 \
+  --experiment-name ndizi_whisper_turbo_optimized_eval
+```
+
 ### Error analysis notebook
 
 After baseline + LoRA test evals:
