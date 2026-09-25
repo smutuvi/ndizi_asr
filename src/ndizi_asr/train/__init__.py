@@ -83,8 +83,13 @@ def run_train(cfg: TrainConfig, *, dry_run: bool = False) -> dict[str, Any]:
     outputs/<experiment>/, then (when dry_run=False and deps present) call the
     backend-specific trainer.
     """
-    if not cfg.dataset_id and not cfg.csv_path:
-        raise ValueError("Provide dataset_id (HF Hub) or csv_path for training data")
+    extra_ids = cfg.extra.get("dataset_ids") or cfg.extra.get("train_datasets")
+    has_hub = bool(cfg.dataset_id) or bool(extra_ids)
+    if not has_hub and not cfg.csv_path:
+        raise ValueError(
+            "Provide dataset_id, extra.dataset_ids / extra.train_datasets (HF Hub), "
+            "or csv_path for training data"
+        )
     if cfg.backend not in {"whisper", "ctc"}:
         raise ValueError(f"Unsupported train backend {cfg.backend!r}; use whisper|ctc")
 

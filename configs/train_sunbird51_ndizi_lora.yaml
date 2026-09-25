@@ -4,6 +4,8 @@
 #   ndizi-asr-train --config configs/train_sunbird51_ndizi_lora.yaml --dry-run
 #   ndizi-asr-train --config configs/train_sunbird51_ndizi_lora.yaml
 
+# Optional top-level alias (also accepted under extra.dataset_ids):
+# dataset_id: smutuvi/ndizi-1
 experiment_name: sunbird51_ndizi_lora
 backend: whisper
 model_id: Sunbird/asr-whisper-51-african-languages
@@ -24,6 +26,7 @@ save_steps: 500
 lora: true
 
 extra:
+  # Merged Hub train/validation corpora (required when dataset_id is omitted)
   dataset_ids:
     - smutuvi/ndizi-1
     - smutuvi/ndizi-1-2025
