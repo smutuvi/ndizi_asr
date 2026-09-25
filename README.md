@@ -101,6 +101,16 @@ python -m ndizi_asr.cli \
   --experiment-name sunbird51_ndizi_lora_eval
 ```
 
+### Error analysis notebook
+
+After baseline + LoRA test evals:
+
+```bash
+jupyter notebook notebooks/ndizi_lora_error_analysis.ipynb
+```
+
+Per-dataset table, best/worst hyps, in-notebook audio + waveforms/spectrograms, and hooks for deeper error review (baseline vs LoRA deltas, duration vs WER).
+
 Scaffold / other Whisper bases: `configs/train_whisper_scaffold.yaml`.
 
 ## Outputs

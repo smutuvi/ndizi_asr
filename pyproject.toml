@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0"]
+dev = ["pytest>=8.0.0", "jupyter>=1.0.0", "matplotlib>=3.7.0", "ipywidgets>=8.0.0"]
 local = [
   "torch>=2.1.0",
   "transformers>=4.40.0",
