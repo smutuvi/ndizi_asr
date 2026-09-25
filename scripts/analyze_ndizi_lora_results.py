@@ -27,14 +27,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
 from jiwer import wer as jiwer_wer
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
 
 
 def _find_metrics(exp_dir: Path) -> Path:
@@ -163,27 +170,65 @@ def _write_wav(path: Path, array: Any, sr: int) -> None:
     sf.write(str(path), arr, sr)
 
 
-def _play_wav(path: Path) -> None:
-    """Play a WAV with the first available local player."""
-    players = [
-        ["ffplay", "-nodisp", "-autoexit", "-loglevel", "error", str(path)],
-        ["afplay", str(path)],  # macOS
-        ["aplay", str(path)],  # Linux ALSA
-        ["paplay", str(path)],  # PulseAudio
-    ]
+def _pulse_available() -> bool:
+    """True only if a PulseAudio/PipeWire server looks reachable."""
+    import os
+    import socket
+
+    if os.environ.get("PULSE_SERVER"):
+        return True
+    # Default native UNIX socket
+    for sock in (
+        Path(os.environ.get("XDG_RUNTIME_DIR", "")) / "pulse" / "native",
+        Path(f"/run/user/{os.getuid()}/pulse/native"),
+    ):
+        if sock.is_socket():
+            try:
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.settimeout(0.2)
+                s.connect(str(sock))
+                s.close()
+                return True
+            except OSError:
+                continue
+    return False
+
+
+def _play_wav(path: Path) -> bool:
+    """Play a WAV with the first available local player. Returns True on success."""
+    players: list[list[str]] = []
+    if shutil.which("ffplay"):
+        players.append(["ffplay", "-nodisp", "-autoexit", "-loglevel", "error", str(path)])
+    if sys.platform == "darwin" and shutil.which("afplay"):
+        players.append(["afplay", str(path)])
+    if shutil.which("aplay"):
+        players.append(["aplay", "-q", str(path)])
+    if _pulse_available() and shutil.which("paplay"):
+        players.append(["paplay", str(path)])
+
+    if not players:
+        print(
+            "   No usable audio player (ffplay/afplay/aplay; paplay skipped — no PulseAudio). "
+            f"File saved at: {path}"
+        )
+        return False
+
     for cmd in players:
-        if shutil.which(cmd[0]) is None:
-            continue
         print(f"   playing with {cmd[0]} …")
         try:
-            subprocess.run(cmd, check=False)
-            return
+            proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
         except Exception as exc:
             print(f"   {cmd[0]} failed: {exc}")
-    print(
-        "   No audio player found (tried ffplay/afplay/aplay/paplay). "
-        f"Open the file manually: {path}"
-    )
+            continue
+        err = (proc.stderr or "") + (proc.stdout or "")
+        if proc.returncode == 0 and "Connection refused" not in err:
+            return True
+        if err.strip():
+            print(f"   {cmd[0]} exit={proc.returncode}: {err.strip()[:200]}")
+        else:
+            print(f"   {cmd[0]} exit={proc.returncode}")
+    print(f"   Playback failed on this machine (likely headless). Keep the WAV: {path}")
+    return False
 
 
 def _safe_stem(row: dict[str, Any], rank: int, kind: str) -> str:
@@ -202,15 +247,13 @@ def _handle_audio(
 ) -> None:
     if not rows:
         return
-    tmp_root = None
-    out_dir = export_dir
-    if out_dir is None and play:
-        tmp_root = Path(tempfile.mkdtemp(prefix="ndizi_asr_play_"))
-        out_dir = tmp_root
-    if out_dir is None:
-        return
+    # Always persist somewhere lasting — temp dirs are easy to lose on headless boxes.
+    if export_dir is None:
+        export_dir = Path("/tmp/ndizi_asr_play") / kind
+    export_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n### Audio ({kind})")
+    print(f"\n### Audio ({kind}) → {export_dir.resolve()}")
+    played_any = False
     for i, row in enumerate(rows, 1):
         print(
             f"\n{i}. loading audio for {row.get('sample_id')} "
@@ -221,7 +264,7 @@ def _handle_audio(
         except Exception as exc:
             print(f"   FAILED to load audio: {exc}")
             continue
-        wav_path = out_dir / f"{_safe_stem(row, i, kind)}.wav"
+        wav_path = export_dir / f"{_safe_stem(row, i, kind)}.wav"
         _write_wav(wav_path, arr, sr)
         meta_path = wav_path.with_suffix(".txt")
         meta_path.write_text(
@@ -239,15 +282,22 @@ def _handle_audio(
         )
         print(f"   wrote {wav_path}")
         if play:
-            _play_wav(wav_path)
+            if _play_wav(wav_path):
+                played_any = True
             if sys.stdin.isatty() and i < len(rows):
                 try:
                     input("   [Enter] next clip  (Ctrl-C to stop) ")
                 except KeyboardInterrupt:
                     print("\n   stopped.")
                     break
-    if export_dir:
-        print(f"\nAudio + transcripts under: {export_dir.resolve()}")
+
+    print(f"\nAudio + transcripts under: {export_dir.resolve()}")
+    if play and not played_any:
+        print(
+            "Playback did not work here (typical on GPU servers without PulseAudio).\n"
+            "Copy to your laptop, then open the WAVs locally, e.g.:\n"
+            f"  scp 'user@host:{export_dir.resolve()}/*.wav' ./ndizi_worst/"
+        )
 
 
 def main() -> int:
