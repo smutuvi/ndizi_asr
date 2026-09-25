@@ -139,6 +139,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
+    # Gated Sunbird / Gemma models need HF_TOKEN from .env (same as eval CLI).
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
     if not args.config.exists():
         logging.error("Config not found: %s", args.config)
         return 2

@@ -48,6 +48,33 @@ def _hub_ids(cfg: "TrainConfig") -> List[str]:
     raise ValueError("Provide dataset_id or extra.dataset_ids for Hub training")
 
 
+def _hf_token() -> Optional[str]:
+    for key in ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+        value = os.getenv(key, "").strip()
+        if value:
+            return value
+    return None
+
+
+def _gated_access_error(model_id: str, exc: Exception) -> OSError:
+    token = _hf_token()
+    auth_hint = (
+        "HF_TOKEN is set, but access was still denied — accept terms at "
+        f"https://huggingface.co/{model_id} with the same account."
+        if token
+        else (
+            "No HF_TOKEN found. Put HF_TOKEN=hf_... in .env (after accepting model "
+            "terms) or run: huggingface-cli login"
+        )
+    )
+    return OSError(
+        f"Cannot download gated model {model_id!r}.\n"
+        f"1) Open https://huggingface.co/{model_id} while logged in and accept access.\n"
+        f"2) {auth_hint}\n"
+        f"Original error: {exc}"
+    )
+
+
 def _load_merged_split(hub_ids: List[str], split: str, *, audio_col: str) -> Dataset:
     parts = []
     for did in hub_ids:
@@ -156,8 +183,18 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         except Exception as exc:
             logger.warning("Could not load eval split %s: %s", eval_split, exc)
 
-    processor = WhisperProcessor.from_pretrained(cfg.model_id)
-    model = WhisperForConditionalGeneration.from_pretrained(cfg.model_id)
+    token = _hf_token()
+    load_kw: Dict[str, Any] = {}
+    if token:
+        load_kw["token"] = token
+    try:
+        processor = WhisperProcessor.from_pretrained(cfg.model_id, **load_kw)
+        model = WhisperForConditionalGeneration.from_pretrained(cfg.model_id, **load_kw)
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "gated" in msg or "401" in msg or "restricted" in msg or "unauthorized" in msg:
+            raise _gated_access_error(cfg.model_id, exc) from exc
+        raise
     if hasattr(model, "generation_config") and model.generation_config is not None:
         model.generation_config.forced_decoder_ids = None
     _set_language_forcing(model, processor, lang_code)
