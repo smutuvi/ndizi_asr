@@ -7,14 +7,32 @@ Example (on the GPU box):
     --baseline results/baseline_sunbird51_ndizi_test \\
     --lora results/sunbird51_ndizi_lora_test \\
     --top 5
+
+Play the worst LoRA samples (reloads audio from Hub):
+
+  python scripts/analyze_ndizi_lora_results.py \\
+    --baseline results/baseline_sunbird51_ndizi_test \\
+    --lora results/sunbird51_ndizi_lora_test \\
+    --top 5 --play worst --play-n 3
+
+Or only export WAVs (good for remote / no speakers):
+
+  python scripts/analyze_ndizi_lora_results.py \\
+    --baseline results/baseline_sunbird51_ndizi_test \\
+    --lora results/sunbird51_ndizi_lora_test \\
+    --top 5 --export-audio /tmp/ndizi_worst_audio --play worst
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from jiwer import wer as jiwer_wer
 
@@ -41,7 +59,6 @@ def _load_metrics(path: Path) -> dict[str, Any]:
     if isinstance(raw, dict) and "overall" in raw:
         return raw
     if isinstance(raw, dict) and "models" in raw:
-        # summary wrapper — take first model
         models = raw["models"]
         first = next(iter(models.values()))
         return first
@@ -90,11 +107,177 @@ def _print_examples(title: str, rows: list[dict[str, Any]]) -> None:
         print(f"   HYP: {hyp[:400]}{'…' if len(hyp) > 400 else ''}")
 
 
+def _row_index(row: dict[str, Any]) -> int:
+    """Parse trailing :idx from sample_id like smutuvi_ndizi-1:<raw>:<idx>."""
+    sid = str(row.get("sample_id") or "")
+    try:
+        return int(sid.rsplit(":", 1)[-1])
+    except ValueError as exc:
+        raise ValueError(f"Cannot parse row index from sample_id={sid!r}") from exc
+
+
+def _load_waveform_for_row(row: dict[str, Any], *, split: str) -> tuple[Any, int]:
+    """Reload audio from the Hub dataset using dataset_id + sample index."""
+    import numpy as np
+    from datasets import Audio, load_dataset
+
+    dataset_id = str(row.get("dataset_id") or "").strip()
+    if not dataset_id:
+        raise ValueError(f"Row missing dataset_id: {row.get('sample_id')}")
+    idx = _row_index(row)
+    ds = load_dataset(dataset_id, split=split)
+    # Prefer an audio feature column
+    audio_col = None
+    cols = list(getattr(ds, "column_names", []) or [])
+    for cand in ("audio", "audio_path", "path", "file", "wav", "speech"):
+        if cand in cols:
+            audio_col = cand
+            break
+    if audio_col is None:
+        raise ValueError(f"No audio column in {dataset_id}; columns={cols}")
+    if audio_col == "audio":
+        ds = ds.cast_column(audio_col, Audio(sampling_rate=16000))
+    if idx < 0 or idx >= len(ds):
+        raise IndexError(f"Index {idx} out of range for {dataset_id}:{split} (n={len(ds)})")
+    item = ds[idx]
+    audio = item[audio_col]
+    if isinstance(audio, dict) and "array" in audio:
+        arr = np.asarray(audio["array"], dtype=np.float32)
+        sr = int(audio.get("sampling_rate") or 16000)
+        return arr, sr
+    if isinstance(audio, str):
+        from ndizi_asr.audio import load_waveform
+
+        return load_waveform(audio)
+    raise TypeError(f"Unsupported audio payload type: {type(audio)}")
+
+
+def _write_wav(path: Path, array: Any, sr: int) -> None:
+    import numpy as np
+    import soundfile as sf
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    arr = np.asarray(array, dtype=np.float32)
+    if arr.ndim > 1:
+        arr = arr.mean(axis=-1)
+    sf.write(str(path), arr, sr)
+
+
+def _play_wav(path: Path) -> None:
+    """Play a WAV with the first available local player."""
+    players = [
+        ["ffplay", "-nodisp", "-autoexit", "-loglevel", "error", str(path)],
+        ["afplay", str(path)],  # macOS
+        ["aplay", str(path)],  # Linux ALSA
+        ["paplay", str(path)],  # PulseAudio
+    ]
+    for cmd in players:
+        if shutil.which(cmd[0]) is None:
+            continue
+        print(f"   playing with {cmd[0]} …")
+        try:
+            subprocess.run(cmd, check=False)
+            return
+        except Exception as exc:
+            print(f"   {cmd[0]} failed: {exc}")
+    print(
+        "   No audio player found (tried ffplay/afplay/aplay/paplay). "
+        f"Open the file manually: {path}"
+    )
+
+
+def _safe_stem(row: dict[str, Any], rank: int, kind: str) -> str:
+    sid = str(row.get("sample_id") or "unknown").replace("/", "_").replace(":", "_")
+    wer = float(row.get("_wer") or 0.0)
+    return f"{kind}_{rank:02d}_wer{wer:.3f}_{sid}"
+
+
+def _handle_audio(
+    rows: list[dict[str, Any]],
+    *,
+    kind: str,
+    play: bool,
+    export_dir: Optional[Path],
+    split: str,
+) -> None:
+    if not rows:
+        return
+    tmp_root = None
+    out_dir = export_dir
+    if out_dir is None and play:
+        tmp_root = Path(tempfile.mkdtemp(prefix="ndizi_asr_play_"))
+        out_dir = tmp_root
+    if out_dir is None:
+        return
+
+    print(f"\n### Audio ({kind})")
+    for i, row in enumerate(rows, 1):
+        print(
+            f"\n{i}. loading audio for {row.get('sample_id')} "
+            f"(dataset={row.get('dataset_id')}, WER={row['_wer']:.3f})"
+        )
+        try:
+            arr, sr = _load_waveform_for_row(row, split=split)
+        except Exception as exc:
+            print(f"   FAILED to load audio: {exc}")
+            continue
+        wav_path = out_dir / f"{_safe_stem(row, i, kind)}.wav"
+        _write_wav(wav_path, arr, sr)
+        meta_path = wav_path.with_suffix(".txt")
+        meta_path.write_text(
+            "\n".join(
+                [
+                    f"sample_id: {row.get('sample_id')}",
+                    f"dataset_id: {row.get('dataset_id')}",
+                    f"wer: {row['_wer']:.6f}",
+                    f"REF: {row.get('reference')}",
+                    f"HYP: {row.get('prediction')}",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        print(f"   wrote {wav_path}")
+        if play:
+            _play_wav(wav_path)
+            if sys.stdin.isatty() and i < len(rows):
+                try:
+                    input("   [Enter] next clip  (Ctrl-C to stop) ")
+                except KeyboardInterrupt:
+                    print("\n   stopped.")
+                    break
+    if export_dir:
+        print(f"\nAudio + transcripts under: {export_dir.resolve()}")
+
+
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--baseline", type=Path, required=True)
     p.add_argument("--lora", type=Path, required=True)
     p.add_argument("--top", type=int, default=5, help="Best/worst example count")
+    p.add_argument(
+        "--play",
+        choices=["none", "worst", "best", "both"],
+        default="none",
+        help="Play LoRA examples (reloads audio from Hub via dataset_id + sample index)",
+    )
+    p.add_argument(
+        "--play-n",
+        type=int,
+        default=None,
+        help="How many clips to play/export (default: --top)",
+    )
+    p.add_argument(
+        "--export-audio",
+        type=Path,
+        default=None,
+        help="Write WAVs (+ .txt REF/HYP) here; useful on remote servers",
+    )
+    p.add_argument(
+        "--split",
+        default="test",
+        help="Hub split used when reloading audio (default: test)",
+    )
     args = p.parse_args()
 
     base_m = _load_metrics(_find_metrics(args.baseline))
@@ -114,7 +297,6 @@ def main() -> int:
     print("-" * len(hdr))
 
     def pick(block: dict, key: str) -> Any:
-        # Prefer normalized metrics used in the comparison table (WER↓ column)
         return block.get(f"{key}_normalized", block.get(key))
 
     for ds in datasets + ["__overall__"]:
@@ -146,8 +328,33 @@ def main() -> int:
     lora_rows = _score_rows(_find_predictions(args.lora))
     lora_rows.sort(key=lambda r: r["_wer"])
     k = max(1, int(args.top))
-    _print_examples(f"LoRA best {k} (lowest WER)", lora_rows[:k])
-    _print_examples(f"LoRA worst {k} (highest WER)", list(reversed(lora_rows[-k:])))
+    best = lora_rows[:k]
+    worst = list(reversed(lora_rows[-k:]))
+    _print_examples(f"LoRA best {k} (lowest WER)", best)
+    _print_examples(f"LoRA worst {k} (highest WER)", worst)
+
+    play_n = max(1, int(args.play_n if args.play_n is not None else k))
+    want_play = args.play != "none"
+    want_export = args.export_audio is not None
+    if want_play or want_export:
+        do_worst = args.play in {"worst", "both"} or (args.play == "none" and want_export)
+        do_best = args.play in {"best", "both"} or (args.play == "none" and want_export)
+        if do_worst:
+            _handle_audio(
+                worst[:play_n],
+                kind="worst",
+                play=args.play in {"worst", "both"},
+                export_dir=(args.export_audio / "worst") if args.export_audio else None,
+                split=args.split,
+            )
+        if do_best:
+            _handle_audio(
+                best[:play_n],
+                kind="best",
+                play=args.play in {"best", "both"},
+                export_dir=(args.export_audio / "best") if args.export_audio else None,
+                split=args.split,
+            )
     return 0
 
 
