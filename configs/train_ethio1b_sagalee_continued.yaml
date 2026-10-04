@@ -1,0 +1,54 @@
+# Continued fine-tune Ethio-ASR multilingual 1B on Sagalee (Oromo read speech).
+#
+# Start from WAXAL-adapted MMS-1B, gentle LR, few epochs → outputs/...
+#
+#   pip install -e ".[train]"
+#   ndizi-asr-train --config configs/train_ethio1b_sagalee_continued.yaml --dry-run
+#   ndizi-asr-train --config configs/train_ethio1b_sagalee_continued.yaml
+#
+# Smoke (subset):
+#   # set extra.max_train_samples / max_eval_samples below, or edit temporarily
+#
+# Eval after train:
+#   python -m ndizi_asr.cli --model hf:outputs/ethio1b_sagalee_continued \
+#     --dataset turiabu/Sagalee --normalize ethio \
+#     --experiment-name ethio1b_sagalee_test
+#   python -m ndizi_asr.cli --model hf:outputs/ethio1b_sagalee_continued \
+#     --config configs/cropconcept_oromo.yaml \
+#     --experiment-name cropconcept_after_sagalee_ft
+
+experiment_name: ethio1b_sagalee_continued
+backend: ctc
+model_id: badrex/Ethio-ASR-multilingual-1B
+dataset_id: turiabu/Sagalee
+language: oromo
+audio_column: audio
+text_column: transcription
+split: train
+eval_split: dev
+output_dir: outputs
+
+# Gentle continued FT (lower than typical first-pass FT)
+num_train_epochs: 2
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 4
+learning_rate: 1.0e-5
+warmup_ratio: 0.05
+fp16: true
+logging_steps: 50
+save_steps: 1000
+lora: false
+
+extra:
+  prepend_lang_token: true          # Ethio-ASR [ORM] LID target
+  max_input_seconds: 30
+  min_input_seconds: 0.5
+  # Uncomment for a quick smoke run:
+  # max_train_samples: 200
+  # max_eval_samples: 50
+  eval_steps: 1000
+  save_total_limit: 2
+  per_device_eval_batch_size: 4
+  dataloader_num_workers: 2
+  gradient_checkpointing: true
+  group_by_length: true

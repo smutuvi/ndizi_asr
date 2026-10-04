@@ -122,6 +122,34 @@ jupyter notebook notebooks/ndizi_lora_error_analysis.ipynb
 
 Per-dataset table, best/worst hyps, in-notebook audio + waveforms/spectrograms, and hooks for deeper error review (baseline vs LoRA deltas, duration vs WER).
 
+### Continued FT — Ethio-ASR 1B on Sagalee (Oromo)
+
+Start from the WAXAL-adapted CTC checkpoint and gently fine-tune on
+[`turiabu/Sagalee`](https://huggingface.co/datasets/turiabu/Sagalee) (~94h train).
+Targets prepend Ethio-ASR’s `[ORM]` language token.
+
+```bash
+pip install -e ".[train]"
+ndizi-asr-train --config configs/train_ethio1b_sagalee_continued.yaml --dry-run
+ndizi-asr-train --config configs/train_ethio1b_sagalee_continued.yaml
+# → outputs/ethio1b_sagalee_continued/
+```
+
+Then score Sagalee test and/or CropConcept:
+
+```bash
+python -m ndizi_asr.cli \
+  --model hf:outputs/ethio1b_sagalee_continued \
+  --dataset turiabu/Sagalee \
+  --normalize ethio \
+  --experiment-name ethio1b_sagalee_test
+
+python -m ndizi_asr.cli \
+  --model hf:outputs/ethio1b_sagalee_continued ethio-asr-multilingual-1b \
+  --config configs/cropconcept_oromo.yaml \
+  --experiment-name cropconcept_after_sagalee_ft
+```
+
 Scaffold / other Whisper bases: `configs/train_whisper_scaffold.yaml`.
 
 ## Outputs
