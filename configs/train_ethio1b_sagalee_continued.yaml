@@ -51,4 +51,4 @@ extra:
   per_device_eval_batch_size: 4
   dataloader_num_workers: 2
   gradient_checkpointing: true
-  group_by_length: true
+  group_by_length: false   # some transformers builds omit this arg

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import os
@@ -79,6 +80,20 @@ def _hub_ids(cfg: "TrainConfig") -> List[str]:
     if cfg.dataset_id:
         return [str(cfg.dataset_id)]
     raise ValueError("Provide dataset_id or extra.dataset_ids for Hub training")
+
+
+def _make_training_arguments(**kwargs: Any) -> TrainingArguments:
+    """Build TrainingArguments, dropping/aliasing keys for older transformers."""
+    params = inspect.signature(TrainingArguments.__init__).parameters
+    # Older transformers: evaluation_strategy; newer: eval_strategy
+    if "eval_strategy" in kwargs and "eval_strategy" not in params and "evaluation_strategy" in params:
+        kwargs["evaluation_strategy"] = kwargs.pop("eval_strategy")
+    elif "evaluation_strategy" in kwargs and "evaluation_strategy" not in params and "eval_strategy" in params:
+        kwargs["eval_strategy"] = kwargs.pop("evaluation_strategy")
+    unknown = [k for k in list(kwargs) if k not in params and k != "self"]
+    for k in unknown:
+        logger.warning("TrainingArguments: ignoring unsupported arg %s=%r", k, kwargs.pop(k))
+    return TrainingArguments(**kwargs)
 
 
 @dataclass
@@ -216,9 +231,10 @@ def train_ctc(cfg: "TrainConfig") -> dict[str, Any]:
         return {"wer": float(wer_metric.compute(predictions=pred_str, references=label_str))}
 
     use_bf16 = bool(cfg.extra.get("bf16", False))
-    args = TrainingArguments(
+    args = _make_training_arguments(
         output_dir=str(out_dir),
-        group_by_length=bool(cfg.extra.get("group_by_length", True)),
+        # Optional on some transformers builds; dropped automatically if unsupported
+        group_by_length=bool(cfg.extra.get("group_by_length", False)),
         per_device_train_batch_size=cfg.per_device_train_batch_size,
         per_device_eval_batch_size=int(
             cfg.extra.get("per_device_eval_batch_size", cfg.per_device_train_batch_size)
