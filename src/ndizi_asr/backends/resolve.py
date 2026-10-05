@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, Sequence
 
+logger = logging.getLogger(__name__)
 
 LOCAL_WHISPER_PREFIXES = (
     "Sunbird/asr-whisper",
@@ -17,6 +21,65 @@ LOCAL_CTC_PREFIXES = (
     "facebook/mms-1b",
     "facebook/wav2vec2",
 )
+
+_CTC_CONFIG_TYPES = frozenset(
+    {
+        "wav2vec2",
+        "wav2vec2_bert",
+        "wav2vec2-bert",
+        "hubert",
+        "data2vec-audio",
+        "data2vec_audio",
+        "unispeech",
+        "unispeech-sat",
+        "sew",
+        "sew-d",
+        "mms",
+    }
+)
+_WHISPER_CONFIG_TYPES = frozenset({"whisper"})
+_GEMMA_CONFIG_TYPES = frozenset({"gemma3", "gemma2", "gemma", "paligemma"})
+
+
+def _peek_hf_model_type(model_id: str) -> Optional[str]:
+    """Read model_type from a local checkpoint config.json if present."""
+    path = Path(model_id).expanduser()
+    cfg_path = path / "config.json" if path.is_dir() else None
+    if cfg_path is None or not cfg_path.is_file():
+        return None
+    try:
+        data = json.loads(cfg_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.debug("Could not read %s: %s", cfg_path, exc)
+        return None
+    mt = data.get("model_type") or data.get("architectures")
+    if isinstance(mt, list) and mt:
+        # e.g. ["Wav2Vec2ForCTC"] ? wav2vec2
+        name = str(mt[0]).lower()
+        if "whisper" in name:
+            return "whisper"
+        if "wav2vec2" in name or "mms" in name:
+            return "wav2vec2"
+        if "gemma" in name:
+            return "gemma3"
+        return name
+    if isinstance(mt, str):
+        return mt.lower().strip()
+    return None
+
+
+def _backend_from_local_config(model_id: str) -> Optional[str]:
+    mt = _peek_hf_model_type(model_id)
+    if not mt:
+        return None
+    if mt in _WHISPER_CONFIG_TYPES or "whisper" in mt:
+        return "hf_whisper"
+    if mt in _CTC_CONFIG_TYPES or "wav2vec" in mt or mt.startswith("mms"):
+        return "hf_ctc"
+    if mt in _GEMMA_CONFIG_TYPES or "gemma" in mt:
+        return "hf_gemma"
+    return None
+
 
 MODEL_ALIASES: dict[str, str] = {
     # Google Gemma 4 E2B
@@ -130,16 +193,12 @@ def canonicalize_model_id(model: str) -> str:
     return MODEL_ALIASES.get(raw, MODEL_ALIASES.get(raw.lower(), raw))
 
 
-def _is_gemma_model(model_id: str) -> bool:
-    mid = model_id.lower()
-    if "gemma-4" in mid or "gemma4" in mid:
-        return True
-    if mid.startswith("sunbird/sunflower-gemma"):
-        return True
-    return False
-
-
 def _is_whisper_model(model_id: str) -> bool:
+    local = _backend_from_local_config(model_id)
+    if local == "hf_whisper":
+        return True
+    if local is not None:
+        return False
     mid = model_id.lower()
     return (
         model_id.startswith(LOCAL_WHISPER_PREFIXES)
@@ -149,15 +208,36 @@ def _is_whisper_model(model_id: str) -> bool:
 
 
 def _is_ctc_model(model_id: str) -> bool:
+    local = _backend_from_local_config(model_id)
+    if local == "hf_ctc":
+        return True
+    if local is not None:
+        return False
     if model_id.startswith(LOCAL_CTC_PREFIXES):
         return True
     mid = model_id.lower()
     return (
         "ethio-asr" in mid
+        or "ethio1b" in mid
         or "/wav2vec2" in mid
         or "/mms-" in mid
         or "w2v-bert" in mid
+        or "sagalee_continued" in mid
     )
+
+
+def _is_gemma_model(model_id: str) -> bool:
+    local = _backend_from_local_config(model_id)
+    if local == "hf_gemma":
+        return True
+    if local is not None:
+        return False
+    mid = model_id.lower()
+    if "gemma-4" in mid or "gemma4" in mid:
+        return True
+    if mid.startswith("sunbird/sunflower-gemma"):
+        return True
+    return False
 
 
 def _is_omnilingual_card(model_id: str) -> bool:
@@ -213,7 +293,11 @@ def parse_model_spec(model: str) -> ModelSpec:
 
     if lower.startswith(("hf:", "hf_whisper:")):
         model_id = canonicalize_model_id(raw)
-        if _is_gemma_model(model_id):
+        # Prefer local config.json when loading a fine-tuned checkpoint dir
+        local_backend = _backend_from_local_config(model_id)
+        if local_backend:
+            backend = local_backend
+        elif _is_gemma_model(model_id):
             backend = "hf_gemma"
         elif _is_ctc_model(model_id):
             backend = "hf_ctc"

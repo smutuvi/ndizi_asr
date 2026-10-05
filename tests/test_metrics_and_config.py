@@ -81,6 +81,8 @@ def test_parse_ethio_and_omnilingual():
     assert omni.backend == "omnilingual"
     assert omni.model_id == "omniASR_LLM_7B"
     assert parse_model_spec("ctc:org/custom-ctc").backend == "hf_ctc"
+    assert parse_model_spec("hf:outputs/ethio1b_sagalee_continued").backend == "hf_ctc"
+    assert parse_model_spec("ctc:outputs/ethio1b_sagalee_continued").backend == "hf_ctc"
     assert needs_omnilingual(["omnilingualasr"]) is True
     assert expand_model_groups(["ethio"]) == [
         "ethio-asr-amharic",
