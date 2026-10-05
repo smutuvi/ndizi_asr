@@ -1,0 +1,17 @@
+# CropConcept / Afaan Oromo — seed glossary for LLM fusion editor
+# Prefer spellings below when consistent with ASR evidence. Do not invent content.
+
+## Domain
+- hybrid wheat / qamadii / wheat varieties discussed in farmer interviews
+- fertilizer / qoricha / chemical inputs
+- seedling / biqiltuu
+- harvest / oomisha / yield
+- soil / lafa
+- seed / facaasa / sowing
+- government / mootummaa (when spoken)
+- money / mallaqa / qarshii
+
+## Style
+- Keep Afaan Oromo orthography (Latin Qubee); do not translate to English or Amharic
+- Prefer majority vote across ASR hypotheses when spellings differ slightly
+- Do not add agronomy terms that no hypothesis supports
