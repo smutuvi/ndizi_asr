@@ -77,6 +77,13 @@ def resolve_hub_audio_path(
     ) from last_err
 
 
+def _load_path_audio(path: str, target_sr: int = 16000) -> tuple[np.ndarray, int]:
+    """Decode via ffmpeg/soundfile — avoids torchcodec PyTorch teardown crashes."""
+    from ..audio import load_waveform
+
+    return load_waveform(path, target_sr=target_sr)
+
+
 def extract_audio(value: Any) -> tuple[np.ndarray, int]:
     if isinstance(value, dict):
         array = value.get("array")
@@ -84,21 +91,30 @@ def extract_audio(value: Any) -> tuple[np.ndarray, int]:
         if array is None or sr is None:
             path = value.get("path")
             if path:
+                return _load_path_audio(str(path))
+            raw = value.get("bytes")
+            if raw:
+                import io
                 import soundfile as sf
 
-                array, sr = sf.read(path)
-            else:
-                raise ValueError(f"Unsupported audio dict keys: {list(value.keys())}")
+                array, sr = sf.read(io.BytesIO(raw))
+                return _to_mono_float32(array), int(sr)
+            raise ValueError(f"Unsupported audio dict keys: {list(value.keys())}")
         return _to_mono_float32(array), int(sr)
 
     if isinstance(value, str):
-        import soundfile as sf
+        return _load_path_audio(value)
 
-        array, sr = sf.read(value)
-        return _to_mono_float32(array), int(sr)
+    # Hugging Face datasets >= 4.x: torchcodec AudioDecoder — prefer path if present
+    path = getattr(value, "path", None) or getattr(value, "_hf_encoded", {}).get("path")
+    if isinstance(path, str) and path:
+        return _load_path_audio(path)
+    encoded = getattr(value, "_hf_encoded", None)
+    if isinstance(encoded, dict) and encoded.get("path"):
+        return _load_path_audio(str(encoded["path"]))
 
-    # Hugging Face datasets >= 4.x: torchcodec AudioDecoder
     if hasattr(value, "get_all_samples"):
+        # Last resort; can segfault under concurrent decode — prefer HF_DATASETS_DISABLE_TORCHCODEC
         samples = value.get_all_samples()
         data = samples.data
         if hasattr(data, "detach"):
@@ -145,6 +161,11 @@ def _load_hf_split(
     trust_remote_code: bool,
     load_kwargs: dict[str, Any],
 ):
+    import os
+
+    # Avoid torchcodec (PyTorch AudioDecoder) — known to abort on long Hub MP3 evals.
+    os.environ.setdefault("HF_DATASETS_DISABLE_TORCHCODEC", "1")
+
     from datasets import Audio, load_dataset
 
     kwargs: dict[str, Any] = {
@@ -162,13 +183,15 @@ def _load_hf_split(
         ds = load_dataset(dataset_id, **kwargs)
 
     cols = list(ds.column_names) if hasattr(ds, "column_names") else []
-    # Prefer 16 kHz decode for ASR; works on map-style and most streaming IterableDatasets
+    # decode=False → path/bytes only; we decode with ffmpeg/soundfile in extract_audio
     if "audio" in cols:
         try:
-            ds = ds.cast_column("audio", Audio(sampling_rate=16000))
+            ds = ds.cast_column("audio", Audio(sampling_rate=16000, decode=False))
         except Exception:
-            # Streaming backends occasionally reject cast; extract_audio still handles decode
-            pass
+            try:
+                ds = ds.cast_column("audio", Audio(decode=False))
+            except Exception:
+                pass
     return ds
 
 

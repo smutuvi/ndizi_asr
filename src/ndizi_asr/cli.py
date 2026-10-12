@@ -306,6 +306,9 @@ def apply_overrides(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, 
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    # Before datasets/torchcodec import: force path-based audio decode
+    os.environ.setdefault("HF_DATASETS_DISABLE_TORCHCODEC", "1")
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
