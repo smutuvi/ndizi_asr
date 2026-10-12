@@ -1,124 +1,32 @@
 {
   "experiment_name": "ndizi1sw_whisper_gemini",
-  "created_at": "20261012T103830Z",
-  "dataset": {
-    "type": "huggingface",
-    "dataset_id": "google/fleurs",
-    "config_name": null,
-    "split": "test",
-    "languages": {},
-    "sources": [
-      {
-        "dataset_id": "smutuvi/ndizi-1-sw",
-        "split": "test",
-        "config_name": null,
-        "language": "swahili",
-        "audio_column": "audio",
-        "text_column": "transcript",
-        "id_column": null,
-        "max_samples": null,
-        "revision": null,
-        "trust_remote_code": null,
-        "load_kwargs": {}
-      }
-    ],
-    "language": "swahili",
-    "audio_column": "audio",
-    "text_column": "transcript",
-    "id_column": null,
-    "max_samples": null,
-    "streaming": false,
-    "revision": null,
-    "trust_remote_code": false,
-    "load_kwargs": {},
-    "csv_path": null,
-    "data_root": null,
-    "language_filter": [],
-    "cropconcept_media_map": null,
-    "cropconcept_transcripts": null,
-    "cropconcept_audio_dir": null,
-    "cropconcept_include_not_counted": false
-  },
+  "dataset_id": "smutuvi/ndizi-1-sw",
+  "split": "test",
+  "text_column": "transcript",
+  "normalize": "default",
+  "n": 1036,
   "models": {
     "ndizi-whisper-turbo": {
-      "model": "ndizi-whisper-turbo",
       "backend": "hf_whisper",
       "model_id": "smutuvi/ndizi-whisper-large-v3-turbo-optimized",
-      "overall": {
-        "num_samples": 1036,
-        "num_scored": 1036,
-        "num_errors": 0,
-        "wer": 0.4005528210847901,
-        "cer": 0.13245539141477555,
-        "wer_normalized": 0.3594261996650404,
-        "cer_normalized": 0.11794365166483718,
-        "mean_latency_seconds": 1.0680206076324734
-      },
-      "per_language": {
-        "swahili": {
-          "num_samples": 1036,
-          "num_scored": 1036,
-          "num_errors": 0,
-          "wer": 0.4005528210847901,
-          "cer": 0.13245539141477555,
-          "wer_normalized": 0.3594261996650404,
-          "cer_normalized": 0.11794365166483718,
-          "mean_latency_seconds": 1.0680206076324734
-        }
-      },
-      "per_dataset": {
-        "smutuvi/ndizi-1-sw": {
-          "num_samples": 1036,
-          "num_scored": 1036,
-          "num_errors": 0,
-          "wer": 0.4005528210847901,
-          "cer": 0.13245539141477555,
-          "wer_normalized": 0.3594261996650404,
-          "cer_normalized": 0.11794365166483718,
-          "mean_latency_seconds": 1.0680206076324734
-        }
-      },
-      "predictions_path": "results/ndizi1sw_whisper_gemini/ndizi-whisper-turbo/predictions.jsonl"
+      "num_scored": 1036,
+      "num_errors": 0,
+      "wer_normalized": 0.3594261996650404,
+      "cer_normalized": 0.11794365166483718,
+      "wer": 0.4005528210847901,
+      "cer": 0.13245539141477555,
+      "mean_latency_seconds": 1.0680206076324734
     },
     "gemini-2.5-flash": {
-      "model": "gemini-2.5-flash",
       "backend": "openrouter",
       "model_id": "google/gemini-2.5-flash",
-      "overall": {
-        "num_samples": 1036,
-        "num_scored": 1036,
-        "num_errors": 0,
-        "wer": 0.45319205683388697,
-        "cer": 0.14054484534972989,
-        "wer_normalized": 0.36195053277992184,
-        "cer_normalized": 0.11307720453713868,
-        "mean_latency_seconds": 3.6517214761960632
-      },
-      "per_language": {
-        "swahili": {
-          "num_samples": 1036,
-          "num_scored": 1036,
-          "num_errors": 0,
-          "wer": 0.45319205683388697,
-          "cer": 0.14054484534972989,
-          "wer_normalized": 0.36195053277992184,
-          "cer_normalized": 0.11307720453713868,
-          "mean_latency_seconds": 3.6517214761960632
-        }
-      },
-      "per_dataset": {
-        "smutuvi/ndizi-1-sw": {
-          "num_samples": 1036,
-          "num_scored": 1036,
-          "num_errors": 0,
-          "wer": 0.45319205683388697,
-          "cer": 0.14054484534972989,
-          "wer_normalized": 0.36195053277992184,
-          "cer_normalized": 0.11307720453713868,
-          "mean_latency_seconds": 3.6517214761960632
-        }
-      },
-      "predictions_path": "results/ndizi1sw_whisper_gemini/gemini-2.5-flash/predictions.jsonl"
+      "num_scored": 1036,
+      "num_errors": 0,
+      "wer_normalized": 0.36195053277992184,
+      "cer_normalized": 0.11307720453713868,
+      "wer": 0.45319205683388697,
+      "cer": 0.14054484534972989,
+      "mean_latency_seconds": 3.6517214761960632
     }
   }
 }
