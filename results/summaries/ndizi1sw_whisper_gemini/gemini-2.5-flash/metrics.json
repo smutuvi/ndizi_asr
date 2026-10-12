@@ -1,0 +1,40 @@
+{
+  "model": "gemini-2.5-flash",
+  "backend": "openrouter",
+  "model_id": "google/gemini-2.5-flash",
+  "overall": {
+    "num_samples": 1036,
+    "num_scored": 1036,
+    "num_errors": 0,
+    "wer": 0.45319205683388697,
+    "cer": 0.14054484534972989,
+    "wer_normalized": 0.36195053277992184,
+    "cer_normalized": 0.11307720453713868,
+    "mean_latency_seconds": 3.6517214761960632
+  },
+  "per_language": {
+    "swahili": {
+      "num_samples": 1036,
+      "num_scored": 1036,
+      "num_errors": 0,
+      "wer": 0.45319205683388697,
+      "cer": 0.14054484534972989,
+      "wer_normalized": 0.36195053277992184,
+      "cer_normalized": 0.11307720453713868,
+      "mean_latency_seconds": 3.6517214761960632
+    }
+  },
+  "per_dataset": {
+    "smutuvi/ndizi-1-sw": {
+      "num_samples": 1036,
+      "num_scored": 1036,
+      "num_errors": 0,
+      "wer": 0.45319205683388697,
+      "cer": 0.14054484534972989,
+      "wer_normalized": 0.36195053277992184,
+      "cer_normalized": 0.11307720453713868,
+      "mean_latency_seconds": 3.6517214761960632
+    }
+  },
+  "predictions_path": "results/ndizi1sw_whisper_gemini/gemini-2.5-flash/predictions.jsonl"
+}
