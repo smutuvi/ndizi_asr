@@ -77,6 +77,9 @@ EDITOR_ALIASES = {
     "gemini-pro": "google/gemini-2.5-pro",
     "gemini-2.5-flash": "google/gemini-2.5-flash",
     "gemini-2.5-pro": "google/gemini-2.5-pro",
+    "gemini-4-argon": "google/gemini-4-argon",
+    "gemini-4": "google/gemini-4-argon",
+    "gemini-argon": "google/gemini-4-argon",
     # Common misspelling: "gemma 2.5" → Gemini 2.5 Flash (OpenRouter editor)
     "gemma": "google/gemini-2.5-flash",
     "gemma-2.5": "google/gemini-2.5-flash",
