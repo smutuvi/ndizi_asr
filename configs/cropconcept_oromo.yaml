@@ -1,16 +1,27 @@
-# Ethiopia / CropConcept eval (merged from ndizi_eval).
-# Point cropconcept_* paths at your Ethiopia_crop_concept/ndizi_eval tree,
-# or use --csv with a prebuilt manifest.
+# CropConcept Oromo eval from a local folder (media map + transcripts + audio).
+#
+# Set CROP_ROOT to your eval_set_final directory, e.g.:
+#   Mac:  /Users/mutuvi/Documents/ndizi/Ethiopia_crop_concept/ndizi_eval/eval_set_final
+#   GPU:  /local/ndizi/4.Scripts/ndizi_eval/eval_set_final
+#
+# Then either edit the three cropconcept_* paths below, or use the CSV helper:
+#   EVAL_ROOT=... MAX_SAMPLES=0 ./scripts/run_cropconcept_compare.sh
+#
 experiment_name: cropconcept_oromo
 models:
-  - oromo   # expands: gemini, omnilingual, ethio-ctc, sunbird-51
+  # omnilingualasr-ctc → omniASR_CTC_1B
+  - omnilingualasr-ctc
+  - ethio-asr-oromo
+  - ethio-asr-multilingual-1b
+  - sunbird-whisper-51
+  # optional cloud: gemini-2.5-flash
 dataset:
   type: cropconcept
   dataset_id: cropconcept
   language_filter: [om]
-  # Override these paths for your machine:
+  # Override these three paths for your machine:
   cropconcept_media_map: /Users/mutuvi/Documents/ndizi/Ethiopia_crop_concept/ndizi_eval/eval_set_final/files/cropconcept-audio-media-map.csv
-  cropconcept_transcripts: /Users/mutuvi/Documents/ndizi/Ethiopia_crop_concept/ndizi_eval/eval_set_final/files/transcription-check_Oromo-Transcript-Evaluation_2026-09-15.csv
+  cropconcept_transcripts: /Users/mutuvi/Documents/ndizi/Ethiopia_crop_concept/ndizi_eval/eval_set_final/files/transcription-check_Oromo-Transcript-Evaluation_2026-10-09.csv
   cropconcept_audio_dir: /Users/mutuvi/Documents/ndizi/Ethiopia_crop_concept/ndizi_eval/eval_set_final/cropconcept-audio-samples
   cropconcept_include_not_counted: false
   max_samples: null
@@ -18,6 +29,6 @@ normalization:
   mode: ethio
 local_whisper:
   concurrency: 1
-concurrency: 2
+concurrency: 1
 output_dir: results
 resume: true
