@@ -150,17 +150,23 @@ python -m ndizi_asr.cli \
   --experiment-name cropconcept_after_sagalee_ft
 ```
 
-### CropConcept fusion (post Sagalee FT)
+### CropConcept fusion (multi-ASR → Opus)
 
-Multi-ASR + LLM editor on the counted Oromo CropConcept set
-(Sagalee-continued Ethio-1B + Ethio-Oromo + multilingual-1B, few-shot + glossary):
+Recommended first: Ethio-Oromo + multilingual-1B + Sunbird-51 → Opus
+(few-shot 8 + retrieve, full counted CSV ≈61 → eval n≈53):
 
 ```bash
 cd /local/ndizi/4.Scripts/ndizi_asr && git pull
 # needs OPENROUTER_API_KEY in .env
+EVAL_ROOT=/local/ndizi/4.Scripts/ndizi_eval ./scripts/run_cropconcept_fusion_multi.sh
+# optional: WITH_OMNI_CTC=1 WITH_OMNI_LLM=1 ./scripts/run_cropconcept_fusion_multi.sh
+# → results/cropconcept_oromo_counted_full61_multi_asr_opus_fs8/
+```
+
+Sagalee-FT variant (includes `outputs/ethio1b_sagalee_continued`):
+
+```bash
 EVAL_ROOT=/local/ndizi/4.Scripts/ndizi_eval ./scripts/run_cropconcept_fusion.sh
-# optional: WITH_SUNBIRD=1 EDITOR=gemini-2.5-flash ./scripts/run_cropconcept_fusion.sh
-# → results/cropconcept_fusion_sagalee_fs8/
 ```
 
 Scaffold / other Whisper bases: `configs/train_whisper_scaffold.yaml`.
