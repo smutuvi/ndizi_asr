@@ -26,7 +26,11 @@ data/
 # Results (keep structure, ignore large outputs)
 results/**
 !results/.gitkeep
-!results/summaries/.gitkeep
+!results/summaries/
+!results/summaries/**
+# Still ignore bulky per-utt dumps if copied under summaries/
+results/summaries/**/predictions.jsonl
+results/summaries/**/predictions.csv
 outputs/
 artifacts/
 
