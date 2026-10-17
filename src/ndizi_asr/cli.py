@@ -128,9 +128,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--normalize",
-        choices=["default", "ethio", "none"],
+        choices=["default", "ethio", "oromo_fair", "none"],
         default=None,
-        help="Scoring text normalization (ethio = Ge'ez cleanup from ndizi_eval)",
+        help="Scoring text normalization (ethio = Ge'ez/Latin cleanup; oromo_fair = preserve mid-word hudhaa)",
     )
     p.add_argument("--omni-card", default=None, help="Override Omnilingual model card")
     p.add_argument(

@@ -21,7 +21,7 @@ DEFAULT_ETHIO_CHARACTER_SET = (
     "፠፡።፣፤፥፦፧፨፩፪፫፬፭፮፯፰፱፲፳፴፵፶፷፸፹፺፻፼€"
 )
 
-PUNCTUATION_MARKS: Set[str] = set("-@<%]>?!.,|;:'&+።፠፡፣፤፥፦፧፨()[]{}#*_~^=`/\\")
+PUNCTUATION_MARKS: Set[str] = set("-@<%]>?!.,|;:'’‘ʼʻ“”&+።፠፡፣፤፥፦፧፨()[]{}#*_~^=`/\\")
 
 ALLOWED_CHARACTERS: Set[str] = set(DEFAULT_ETHIO_CHARACTER_SET) - PUNCTUATION_MARKS
 
@@ -109,4 +109,13 @@ def clean_ethio_transcription(
     lang = str(language or "").strip().lower()
     if apply_geez_normalizer and lang in _AMHARIC_LANG_CODES:
         t = get_geez_normalizer().normalize(t, remove_punctuation=True)
+    return process_text(t)
+
+
+_GLOTTAL_RE = re.compile(r"(?<=[a-zA-Z])['’‘ʼʻ`](?=[a-zA-Z])")
+
+
+def clean_oromo_fair_transcription(text: str) -> str:
+    """Keep mid-word Qubee hudhaa (glottal stop) words intact instead of splitting on apostrophe."""
+    t = _GLOTTAL_RE.sub("", str(text or "").strip())
     return process_text(t)

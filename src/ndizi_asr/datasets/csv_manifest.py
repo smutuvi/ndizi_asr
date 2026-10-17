@@ -121,6 +121,12 @@ class CSVManifestLoader(BaseDatasetLoader):
                         "domain": str(row.get("domain") or ""),
                         "audio_path": str(audio),
                         "file_name": file_name,
+                        "media_id": str(row.get("media_id") or "").strip(),
+                        "submission_id": str(row.get("submission_id") or "").strip(),
+                        "question_id": str(row.get("question_id") or "").strip(),
+                        "question": str(row.get("question") or "").strip(),
+                        "our_transcript": str(row.get("our_transcript") or "").strip(),
+                        "counted_in_accuracy": str(row.get("counted_in_accuracy") or "").strip(),
                     },
                     dataset_id=self.cfg.dataset_id or f"csv:{self.csv_path.name}",
                 )
@@ -224,6 +230,19 @@ class CropConceptLoader(BaseDatasetLoader):
                 meta={
                     "domain": "cropconcept",
                     "media_id": media_id,
+                    "submission_id": str(
+                        tx.get("submission_id") or mapped.get("submission_id") or ""
+                    ).strip(),
+                    "question_id": str(
+                        tx.get("question_id") or mapped.get("widget_id") or ""
+                    ).strip(),
+                    "question": str(
+                        tx.get("question") or mapped.get("question") or ""
+                    ).strip(),
+                    "our_transcript": str(tx.get("our_transcript") or "").strip(),
+                    "counted_in_accuracy": str(
+                        tx.get("counted_in_accuracy") or ""
+                    ).strip(),
                     "audio_path": str(audio_path),
                     "file_name": audio_name,
                 },
@@ -254,6 +273,16 @@ def write_manifest_csv(
     out_csv = out_csv.expanduser().resolve()
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = ["audio_path", "reference", "language", "domain", "file_name"]
+    extra_cols = (
+        "media_id",
+        "submission_id",
+        "question_id",
+        "question",
+        "our_transcript",
+        "counted_in_accuracy",
+    )
+    if any(row.get(col) for row in rows for col in extra_cols):
+        fieldnames.extend(extra_cols)
     with out_csv.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -262,13 +291,15 @@ def write_manifest_csv(
             audio_cell = (
                 str(audio.relative_to(relative_to)) if relative_to is not None else str(audio)
             )
-            writer.writerow(
-                {
-                    "audio_path": audio_cell,
-                    "reference": row.get("reference", ""),
-                    "language": row.get("language", ""),
-                    "domain": row.get("domain", ""),
-                    "file_name": row.get("file_name", audio.name),
-                }
-            )
+            out_row = {
+                "audio_path": audio_cell,
+                "reference": row.get("reference", ""),
+                "language": row.get("language", ""),
+                "domain": row.get("domain", ""),
+                "file_name": row.get("file_name", audio.name),
+            }
+            for col in extra_cols:
+                if col in fieldnames:
+                    out_row[col] = row.get(col, "")
+            writer.writerow(out_row)
     return out_csv

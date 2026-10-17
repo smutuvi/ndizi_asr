@@ -8,7 +8,7 @@ from jiwer import cer as jiwer_cer
 from jiwer import wer as jiwer_wer
 
 from .config import NormalizationConfig
-from .ethio_normalize import clean_ethio_transcription
+from .ethio_normalize import clean_ethio_transcription, clean_oromo_fair_transcription
 
 
 _PUNCT_TABLE = str.maketrans("", "", string.punctuation + "።፣፤፥፦፧፨።،؛؟«»\"'„“”‘’…–—")
@@ -25,6 +25,8 @@ def normalize_text(
         return text or ""
     if mode in {"ethio", "ethiopia", "geez"}:
         return clean_ethio_transcription(text, language=language)
+    if mode in {"oromo_fair", "oromo-fair", "qubee"}:
+        return clean_oromo_fair_transcription(text)
 
     out = text or ""
     if cfg.lowercase:
