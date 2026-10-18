@@ -26,7 +26,41 @@ from .metrics import normalize_text, summarize_predictions
 
 logger = logging.getLogger(__name__)
 
-_LOCAL_BACKENDS = frozenset({"hf_whisper", "hf_gemma", "hf_ctc", "omnilingual"})
+_LOCAL_BACKENDS = frozenset({"hf_whisper", "hf_gemma", "hf_ctc", "omnilingual", "our_transcript"})
+
+STRATA_DEFINITIONS: tuple[tuple[str, str], ...] = (
+    ("strict_verbatim", "Strict Verbatim (ratio >= 0.85)"),
+    ("verbatim", "Verbatim (ratio >= 0.70)"),
+    ("near_verbatim", "Near-Verbatim (ratio >= 0.60)"),
+    ("summarized", "Summarized (ratio < 0.60)"),
+    ("all_counted", "All Counted"),
+)
+
+
+def _compute_ref_ratio(reference: str, our_transcript: str) -> Optional[float]:
+    ref_w = len((reference or "").split())
+    our_w = len((our_transcript or "").split())
+    if our_w <= 0:
+        return None
+    return round(ref_w / our_w, 4)
+
+
+def _row_matches_stratum(row: dict[str, Any], stratum_key: str) -> bool:
+    if stratum_key == "all_counted":
+        return True
+    ratio = row.get("ref_ratio")
+    if ratio is None:
+        return False
+    r = float(ratio)
+    if stratum_key == "strict_verbatim":
+        return r >= 0.85
+    if stratum_key == "verbatim":
+        return r >= 0.70
+    if stratum_key == "near_verbatim":
+        return r >= 0.60
+    if stratum_key == "summarized":
+        return r < 0.60
+    return False
 
 
 def _slug(text: str) -> str:
@@ -171,6 +205,7 @@ class BenchmarkRunner:
         summary_path = self.output_root / "summary.json"
         summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
         self._write_summary_csv(summary)
+        self._write_stratified_summary(summary)
         logger.info("Wrote summary to %s", summary_path)
         return summary
 
@@ -262,6 +297,14 @@ class BenchmarkRunner:
                     language=sample.language,
                     language_config=sample.language_config,
                 )
+            elif spec.backend == "our_transcript":
+                our_tx = str((sample.meta or {}).get("our_transcript") or "").strip()
+                result = TranscriptionResult(
+                    text=our_tx,
+                    latency_seconds=0.0,
+                    model="our_transcript",
+                    error=None if our_tx else "Missing our_transcript in sample metadata",
+                )
             else:
                 result = self._transcribe_openrouter_chunked(
                     model_id=spec.model_id,
@@ -270,6 +313,8 @@ class BenchmarkRunner:
                     language=sample.language,
                 )
             pred = result.text
+            our_tx_meta = str((sample.meta or {}).get("our_transcript") or "").strip()
+            ref_ratio = _compute_ref_ratio(sample.reference, our_tx_meta) if our_tx_meta else None
             return {
                 "sample_id": sample.sample_id,
                 "dataset_id": sample.dataset_id,
@@ -287,6 +332,8 @@ class BenchmarkRunner:
                 "model": spec.raw,
                 "backend": spec.backend,
                 "error": result.error,
+                "our_transcript": our_tx_meta,
+                "ref_ratio": ref_ratio,
             }
 
         workers = (
@@ -323,6 +370,14 @@ class BenchmarkRunner:
             for ds_id, ds_rows in sorted(by_dataset.items())
         }
         overall = summarize_predictions(rows, self.config.normalization)
+        per_stratum: dict[str, Any] = {}
+        if any(row.get("ref_ratio") is not None for row in rows):
+            for stratum_key, stratum_label in STRATA_DEFINITIONS:
+                s_rows = [r for r in rows if _row_matches_stratum(r, stratum_key)]
+                if s_rows:
+                    sm = summarize_predictions(s_rows, self.config.normalization)
+                    sm["label"] = stratum_label
+                    per_stratum[stratum_key] = sm
         metrics = {
             "model": spec.raw,
             "backend": spec.backend,
@@ -330,6 +385,7 @@ class BenchmarkRunner:
             "overall": overall,
             "per_language": per_language,
             "per_dataset": per_dataset,
+            "per_stratum": per_stratum,
             "predictions_path": str(predictions_path),
         }
         metrics_path.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -453,3 +509,75 @@ class BenchmarkRunner:
                             },
                         }
                     )
+                for s_key, s_metrics in (metrics.get("per_stratum") or {}).items():
+                    writer.writerow(
+                        {
+                            "model": model,
+                            "dataset_id": f"STRATUM:{s_key}",
+                            "language": "ALL",
+                            **{
+                                k: s_metrics.get(k)
+                                for k in fields
+                                if k not in {"model", "dataset_id", "language"}
+                            },
+                        }
+                    )
+
+    def _write_stratified_summary(self, summary: dict[str, Any]) -> None:
+        models_dict = summary.get("models", {})
+        if not any(m.get("per_stratum") for m in models_dict.values()):
+            return
+        path = self.output_root / "stratified_summary.csv"
+        display_strata = ("verbatim", "near_verbatim", "summarized", "all_counted")
+        fields = [
+            "model",
+            "verbatim_n",
+            "verbatim_wer_pct",
+            "verbatim_cer_pct",
+            "near_verbatim_n",
+            "near_verbatim_wer_pct",
+            "near_verbatim_cer_pct",
+            "summarized_n",
+            "summarized_wer_pct",
+            "summarized_cer_pct",
+            "all_counted_n",
+            "all_counted_wer_pct",
+            "all_counted_cer_pct",
+        ]
+        table_rows: list[dict[str, Any]] = []
+        with path.open("w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
+            writer.writeheader()
+            for model, metrics in models_dict.items():
+                ps = metrics.get("per_stratum") or {}
+                row: dict[str, Any] = {"model": model}
+                for sk in display_strata:
+                    sm = ps.get(sk) or {}
+                    wer = sm.get("wer_normalized", sm.get("wer"))
+                    cer = sm.get("cer_normalized", sm.get("cer"))
+                    row[f"{sk}_n"] = sm.get("num_scored", 0)
+                    row[f"{sk}_wer_pct"] = f"{wer * 100:.2f}" if wer is not None else ""
+                    row[f"{sk}_cer_pct"] = f"{cer * 100:.2f}" if cer is not None else ""
+                writer.writerow(row)
+                table_rows.append(row)
+
+        print(f"\n=== Stratified Evaluation Summary (norm={self.config.normalization}) ===")
+        print(
+            "| Model | Verbatim (>=0.70) WER / CER | Near-Verbatim (>=0.60) WER / CER "
+            "| Summarized (<0.60) WER / CER | All Counted WER / CER |"
+        )
+        print("| :--- | :---: | :---: | :---: | :---: |")
+        for r in table_rows:
+            def _cell(prefix: str) -> str:
+                w = r.get(f"{prefix}_wer_pct", "")
+                c = r.get(f"{prefix}_cer_pct", "")
+                n = r.get(f"{prefix}_n", 0)
+                if not w:
+                    return "—"
+                return f"{w}% / {c}% (n={n})"
+
+            print(
+                f"| `{r['model']}` | {_cell('verbatim')} | {_cell('near_verbatim')} "
+                f"| {_cell('summarized')} | {_cell('all_counted')} |"
+            )
+        print()

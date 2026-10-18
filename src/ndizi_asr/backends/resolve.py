@@ -98,6 +98,7 @@ MODEL_ALIASES: dict[str, str] = {
     "gemini-2.5-flash": "google/gemini-2.5-flash",
     "gemini-2.5-pro": "google/gemini-2.5-pro",
     "gemini-3.5-flash": "google/gemini-3.5-flash",
+    "gemini-3.5-transcribe": "google/gemini-3.5-flash",
     "gemini-3.6-flash": "google/gemini-3.6-flash",
     "gemini-3.8-flash": "google/gemini-3.8-flash",
     "gemini-3-flash": "google/gemini-3.5-flash",
@@ -114,6 +115,9 @@ MODEL_ALIASES: dict[str, str] = {
     "ethio-asr-multilingual-1b": "badrex/Ethio-ASR-multilingual-1B",
     "sunbird-whisper-salt": "Sunbird/asr-whisper-large-v3-salt",
     "sunbird-whisper-51": "Sunbird/asr-whisper-51-african-languages",
+    "ndizi-gemma4-merged": "smutuvi/ndizi-gemma4-e2b-african-asr-merged",
+    "our-transcript": "our_transcript",
+    "our_transcript": "our_transcript",
     # Swahili / Ndizi
     "ndizi-whisper-turbo": "smutuvi/ndizi-whisper-large-v3-turbo-optimized",
     "ndizi-whisper": "smutuvi/ndizi-whisper-large-v3-turbo-optimized",
@@ -140,11 +144,16 @@ MODEL_GROUPS: dict[str, list[str]] = {
         "ethio-asr-multilingual-1b",
     ],
     "oromo": [
+        "our-transcript",
         "gemini-2.5-flash",
+        "gemini-3.5-flash",
         "omnilingualasr-ctc",
         "ethio-asr-oromo",
         "ethio-asr-multilingual-1b",
+        "whisper",
         "sunbird-whisper-51",
+        "sunflower-gemma4-e2b",
+        "ndizi-gemma4-merged",
     ],
     "swahili": [
         "ndizi-whisper-turbo",
@@ -314,6 +323,13 @@ def parse_model_spec(model: str) -> ModelSpec:
         )
 
     model_id = canonicalize_model_id(raw)
+    if lower in {"our-transcript", "our_transcript"} or model_id == "our_transcript":
+        return ModelSpec(
+            raw=raw,
+            backend="our_transcript",
+            model_id="our_transcript",
+            language_filter=None,
+        )
     if _is_omnilingual_card(model_id) or lower in {"omnilingualasr", "omnilingualasr-ctc"}:
         return ModelSpec(
             raw=raw,

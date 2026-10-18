@@ -28,15 +28,20 @@ export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 EVAL_ROOT="${EVAL_ROOT:-/local/ndizi/4.Scripts/ndizi_eval}"
 DEFAULT_CSV="${EVAL_ROOT}/data/manifest_cropconcept_oromo.csv"
-MAX_SAMPLES="${MAX_SAMPLES:-10}"
-EXPERIMENT="${EXPERIMENT:-cropconcept_oromo_n${MAX_SAMPLES}}"
+MAX_SAMPLES="${MAX_SAMPLES:-}"
+EXPERIMENT="${EXPERIMENT:-cropconcept_oromo_all}"
 
 DEFAULT_MODELS=(
+  our-transcript
   gemini-2.5-flash
+  gemini-3.5-flash
   omnilingualasr-ctc
   ethio-asr-oromo
   ethio-asr-multilingual-1b
+  whisper
   sunbird-whisper-51
+  sunflower-gemma4-e2b
+  ndizi-gemma4-merged
 )
 
 list_run_models() {
@@ -114,9 +119,9 @@ if [[ $HAS_LANG -eq 0 ]]; then
   ARGS+=(--languages om)
 fi
 if [[ $HAS_NORM -eq 0 ]]; then
-  ARGS+=(--normalize ethio)
+  ARGS+=(--normalize oromo_fair)
 fi
-if [[ $HAS_MAX -eq 0 ]]; then
+if [[ $HAS_MAX -eq 0 && -n "$MAX_SAMPLES" ]]; then
   ARGS+=(--max-samples "$MAX_SAMPLES")
 fi
 if [[ $HAS_OUT -eq 0 ]]; then
