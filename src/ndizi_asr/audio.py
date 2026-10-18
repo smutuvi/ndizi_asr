@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -14,24 +15,37 @@ TARGET_SR = 16000
 SOUNDFILE_SUFFIXES = {".wav", ".flac", ".ogg", ".aiff", ".aif"}
 logger = logging.getLogger(__name__)
 
+# Serialize ffmpeg/soundfile decode — conda ffmpeg segfaults under threaded load.
+_FFMPEG_LOCK = threading.Lock()
+
 _vad_model = None
 _vad_get_speech_timestamps = None
 
 
+def _is_conda_ffmpeg(path: str) -> bool:
+    p = path.lower()
+    return ("/envs/" in p) or ("/conda/" in p) or ("miniconda" in p) or ("miniforge" in p)
+
+
 def _ffmpeg_candidates() -> list[str]:
-    """Prefer system ffmpeg; conda builds often break (libx264 / LD_LIBRARY_PATH)."""
+    """Prefer system ffmpeg; conda builds often break under concurrent decode."""
     import os
 
     out: list[str] = []
     env_bin = os.environ.get("FFMPEG_BINARY", "").strip()
     if env_bin:
-        out.append(env_bin)
-    # Prefer system binaries before conda-shadowed PATH ffmpeg
+        if Path(env_bin).is_file():
+            # When explicitly set, use only this binary (no conda fallback).
+            return [env_bin]
+        logger.warning("FFMPEG_BINARY=%s not found; falling back to discovery", env_bin)
     for fallback in ("/usr/bin/ffmpeg", "/bin/ffmpeg"):
         if Path(fallback).is_file():
             out.append(fallback)
     which = shutil.which("ffmpeg")
-    if which:
+    if which and not _is_conda_ffmpeg(which):
+        out.append(which)
+    # Conda ffmpeg last — works solo but often segfaults with concurrency > 1
+    if which and _is_conda_ffmpeg(which):
         out.append(which)
     seen: set[str] = set()
     uniq: list[str] = []
@@ -55,6 +69,11 @@ def _ffmpeg_env(*, clean_libs: bool) -> Optional[dict]:
 
 def _load_via_ffmpeg(path: str, target_sr: int) -> Tuple[np.ndarray, int]:
     """Decode compressed audio via ffmpeg → temp WAV → soundfile (avoids pipe heap issues)."""
+    with _FFMPEG_LOCK:
+        return _load_via_ffmpeg_unlocked(path, target_sr)
+
+
+def _load_via_ffmpeg_unlocked(path: str, target_sr: int) -> Tuple[np.ndarray, int]:
     import os
     import tempfile
 
@@ -118,7 +137,7 @@ def _load_via_ffmpeg(path: str, target_sr: int) -> Tuple[np.ndarray, int]:
     raise RuntimeError(
         f"ffmpeg failed for {path!r}. Tried: "
         + " | ".join(errors)
-        + ". Tip: conda deactivate (use ndizi env) and export FFMPEG_BINARY=/usr/bin/ffmpeg"
+        + ". Tip: export FFMPEG_BINARY=/usr/bin/ffmpeg"
     )
 
 
