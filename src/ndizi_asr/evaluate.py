@@ -151,7 +151,7 @@ class BenchmarkRunner:
         sampling_rate: int,
         language: Optional[str],
     ) -> TranscriptionResult:
-        chunks, _ = maybe_chunk(array, sampling_rate, 30.0)
+        chunks, _ = maybe_chunk(array, sampling_rate, self.config.openrouter.max_chunk_seconds)
         client = self._get_openrouter()
         parts: list[str] = []
         total_latency = 0.0
@@ -258,13 +258,12 @@ class BenchmarkRunner:
         buffer: list[dict[str, Any]] = []
 
         def flush() -> None:
-            nonlocal buffer
             if not buffer:
                 return
             with predictions_path.open("a", encoding="utf-8") as f:
                 for row in buffer:
                     f.write(json.dumps(row, ensure_ascii=False) + "\n")
-            buffer = []
+            buffer.clear()
 
         def process_one(sample: AudioSample) -> dict[str, Any]:
             lang_for_norm = sample.language_config or sample.language
@@ -449,6 +448,8 @@ class BenchmarkRunner:
             "model",
             "backend",
             "error",
+            "our_transcript",
+            "ref_ratio",
         ]
         with path.open("w", encoding="utf-8", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")

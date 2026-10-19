@@ -167,6 +167,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--output-dir", default=None)
     p.add_argument("--experiment-name", default=None)
     p.add_argument("--prompt", default=None)
+    p.add_argument(
+        "--max-chunk-seconds",
+        type=float,
+        default=None,
+        help="OpenRouter VAD chunk length in seconds (default 30; 0 = send whole clip)",
+    )
+    p.add_argument("--max-tokens", type=int, default=None, help="OpenRouter max output tokens")
+    p.add_argument("--temperature", type=float, default=None, help="OpenRouter temperature")
+    p.add_argument("--timeout-seconds", type=float, default=None, help="OpenRouter request timeout")
     p.add_argument("--resume", action="store_true", default=None)
     p.add_argument("--no-resume", action="store_true", default=False)
     p.add_argument("--env-file", type=Path, default=Path(".env"))
@@ -234,6 +243,17 @@ def apply_overrides(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, 
         raw["concurrency"] = args.concurrency
     if args.prompt:
         raw["prompt"] = args.prompt
+
+    openrouter = dict(raw.get("openrouter") or {})
+    if args.max_chunk_seconds is not None:
+        openrouter["max_chunk_seconds"] = args.max_chunk_seconds
+    if args.max_tokens is not None:
+        openrouter["max_tokens"] = args.max_tokens
+    if args.temperature is not None:
+        openrouter["temperature"] = args.temperature
+    if args.timeout_seconds is not None:
+        openrouter["timeout_seconds"] = args.timeout_seconds
+    raw["openrouter"] = openrouter
 
     if args.resume:
         raw["resume"] = True

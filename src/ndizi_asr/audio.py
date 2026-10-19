@@ -258,5 +258,24 @@ def maybe_chunk(
     return chunk_waveform_by_vad(waveform, max_chunk_s, sampling_rate=sr), True
 
 
+def collapse_repetition_loops(text: str, max_repeats: int = 3) -> str:
+    """Collapse runaway greedy-decoding repetition loops (e.g. 'Eeyyen. Eeyyen. ...' x 200)."""
+    import re
+
+    out = text or ""
+    if not out:
+        return ""
+    # Collapse 1-to-5 word phrases repeated more than `max_repeats` times consecutively
+    for n_words in (1, 2, 3, 4, 5):
+        word_pat = r"\S+" if n_words == 1 else r"\S+(?:\s+\S+){" + str(n_words - 1) + r"}"
+        pattern = re.compile(
+            r"\b(" + word_pat + r")(?:\s+\1){" + str(max_repeats) + r",}",
+            flags=re.IGNORECASE,
+        )
+        out = pattern.sub(lambda m: " ".join([m.group(1)] * 2), out)
+    return out
+
+
 def join_chunk_transcripts(parts: List[str]) -> str:
-    return " ".join(p.strip() for p in parts if p and str(p).strip())
+    joined = " ".join(collapse_repetition_loops(p.strip()) for p in parts if p and str(p).strip())
+    return collapse_repetition_loops(joined)

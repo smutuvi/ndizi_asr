@@ -12,6 +12,15 @@ class OpenRouterConfig:
     retry_backoff_seconds: float = 2.0
     temperature: float = 0.0
     max_tokens: int = 1024
+    # None = send the whole clip in one request (no VAD chunking)
+    max_chunk_seconds: Optional[float] = 30.0
+
+
+def _parse_chunk_seconds(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    seconds = float(value)
+    return seconds if seconds > 0 else None
 
 
 @dataclass
@@ -216,6 +225,7 @@ def load_run_config(raw: dict[str, Any]) -> RunConfig:
             retry_backoff_seconds=float(or_raw.get("retry_backoff_seconds", 2.0)),
             temperature=float(or_raw.get("temperature", 0.0)),
             max_tokens=int(or_raw.get("max_tokens", 1024)),
+            max_chunk_seconds=_parse_chunk_seconds(or_raw.get("max_chunk_seconds", 30.0)),
         ),
         local_whisper=LocalModelConfig(
             device=local_raw.get("device"),
