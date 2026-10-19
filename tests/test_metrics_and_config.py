@@ -11,7 +11,11 @@ from ndizi_asr.backends.resolve import (
 from ndizi_asr.backends.sunbird_langs import resolve_sunbird_language_code
 from ndizi_asr.config import NormalizationConfig, load_run_config
 from ndizi_asr.datasets.presets import expand_dataset_flags
-from ndizi_asr.ethio_normalize import clean_ethio_transcription
+from ndizi_asr.ethio_normalize import (
+    clean_ethio_transcription,
+    clean_oromo_fair_transcription,
+    clean_oromo_platform_transcription,
+)
 from ndizi_asr.metrics import normalize_text, summarize_predictions
 
 
@@ -44,6 +48,37 @@ def test_normalize_ethio_mode():
     assert clean_ethio_transcription("ሐገር", language="am") == clean_ethio_transcription(
         "ሃገር", language="am"
     )
+
+
+def test_oromo_platform_colleague_tidy():
+    cfg = NormalizationConfig(mode="oromo_platform")
+    # NFKC + lower + punct→space + collapse (no spelling/gemination map).
+    assert normalize_text("  Hello,  World!  ", cfg) == "hello world"
+    assert normalize_text("re’ee", cfg) == "re ee"  # curly apostrophe → space
+    assert clean_oromo_platform_transcription("NUUF") == "nuuf"  # no particle map
+    assert clean_oromo_platform_transcription("qabaa") != clean_oromo_platform_transcription(
+        "qaba"
+    )
+    # Alias
+    assert normalize_text("A,B", NormalizationConfig(mode="colleague")) == "a b"
+
+
+def test_oromo_fair_spelling_and_gemination():
+    cfg = NormalizationConfig(mode="oromo_fair")
+    # Mid-word hudhaa kept as one token (apostrophe stripped, not a split).
+    assert " " not in normalize_text("re'ee", cfg)
+    # Particle / filler map
+    assert normalize_text("nuuf eshii", cfg) == normalize_text("nu eshi", cfg)
+    # Gemination collapse equates length variants
+    assert clean_oromo_fair_transcription("timirtii") == clean_oromo_fair_transcription(
+        "timmirtii"
+    )
+    assert clean_oromo_fair_transcription("qaba") == clean_oromo_fair_transcription("qabaa")
+    assert clean_oromo_fair_transcription("akkaataa") == clean_oromo_fair_transcription(
+        "akkataa"
+    )
+    # Crop orthography aliases
+    assert normalize_text("omisha debalan", cfg) == normalize_text("oomisha deebbala", cfg)
 
 
 def test_summarize_predictions():

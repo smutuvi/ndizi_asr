@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Optional, Set
 
 DEFAULT_ETHIO_CHARACTER_SET = (
@@ -114,8 +115,86 @@ def clean_ethio_transcription(
 
 _GLOTTAL_RE = re.compile(r"(?<=[a-zA-Z])['’‘ʼʻ`](?=[a-zA-Z])")
 
+# Colleague / platform scoring tidy: any punctuation or symbol → space.
+_PLATFORM_PUNCT_RE = re.compile(
+    r"""[
+        !"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~
+        ’‘ʼʻ“”„«»…–—؟،؛
+        ፠፡።፣፤፥፦፧፨
+    ]+""",
+    re.VERBOSE,
+)
+
+# Scoring-only Qubee length collapse: models and annotators often disagree on
+# vowel/consonant gemination (timirtii/timmirtii, qaba/qabaa, akkaataa/akkataa).
+_GEMINATION_RE = re.compile(r"(.)\1+")
+
+# High-frequency particles / fillers / crop orthography that differ by more
+# than gemination alone. Applied after lowercase + hudhaa strip, before
+# gemination collapse. Keep this conservative (no speculative content words).
+_OROMO_SPELLING_MAP: dict[str, str] = {
+    "nuuf": "nu",
+    "nuu": "nu",
+    "eshii": "eshi",
+    "eeshi": "eshi",
+    "eeh": "ee",
+    "ehh": "ee",
+    "eh": "ee",
+    "ahh": "aa",
+    "yaauu": "yoo",
+    "yaaoo": "yoo",
+    "yawuu": "yoo",
+    "debalan": "deebbala",
+    "deebalan": "deebbala",
+    "debala": "deebbala",
+    "omisha": "oomisha",
+    "omishaa": "oomisha",
+    "oomishaa": "oomisha",
+    "sanyi": "sanyii",
+    "sanyiin": "sanyii",
+    "odoo": "oduu",
+}
+
+
+def _apply_oromo_spelling_map(text: str) -> str:
+    tokens = text.split()
+    mapped = [_OROMO_SPELLING_MAP.get(tok, tok) for tok in tokens]
+    return " ".join(mapped)
+
+
+def _collapse_qubee_gemination(text: str) -> str:
+    """Collapse runs of identical letters for fair ASR scoring (length not scored)."""
+    return _GEMINATION_RE.sub(r"\1", text)
+
+
+def clean_oromo_platform_transcription(text: str) -> str:
+    """Colleague/platform scoring tidy (identical on hyp and ref).
+
+    Matches the shared CropConcept artifact preprocess:
+    - standardise character encoding (Unicode NFKC)
+    - lowercase everything
+    - replace each punctuation mark with a space
+    - collapse extra whitespace
+
+    No Oromo spelling map and no gemination collapse — use ``oromo_fair`` for that.
+    """
+    t = unicodedata.normalize("NFKC", str(text or ""))
+    t = t.lower()
+    t = _PLATFORM_PUNCT_RE.sub(" ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
 
 def clean_oromo_fair_transcription(text: str) -> str:
-    """Keep mid-word Qubee hudhaa (glottal stop) words intact instead of splitting on apostrophe."""
+    """Oromo-aware scoring normalize: hudhaa strip, spelling map, gemination collapse.
+
+    Starts from the platform tidy, then:
+    - Mid-word Qubee hudhaa (apostrophe) is removed without splitting the word
+      (applied on the raw string before punct→space so ``re'ee`` stays one token).
+    - A small particle/orthography map plus letter-run collapse reduce false
+      errors from annotator vs model spelling of the same spoken form.
+    """
     t = _GLOTTAL_RE.sub("", str(text or "").strip())
-    return process_text(t)
+    t = process_text(t)
+    t = _apply_oromo_spelling_map(t)
+    t = _collapse_qubee_gemination(t)
+    return re.sub(r"\s+", " ", t).strip()

@@ -48,8 +48,6 @@ def _openai_whisper_language(language: Optional[str], language_config: Optional[
         key = str(candidate).strip().lower()
         if key in _OPENAI_WHISPER_LANG:
             return _OPENAI_WHISPER_LANG[key]
-        # Pass through English names the tokenizer already knows
-        return key
     return None
 
 
@@ -200,7 +198,10 @@ class HuggingFaceWhisperClient:
                 (3, self._notimestamps_tok),
             ]
         # openai/whisper-* and fine-tunes (e.g. ndizi-whisper-large-v3-turbo-*)
-        lang = _openai_whisper_language(language, language_config) or "swahili"
+        lang = _openai_whisper_language(language, language_config)
+        if not lang:
+            # Language not natively supported by OpenAI Whisper (e.g. Oromo); auto-detect task=transcribe
+            return list(self.processor.get_decoder_prompt_ids(task="transcribe"))
         return list(
             self.processor.get_decoder_prompt_ids(language=lang, task="transcribe")
         )

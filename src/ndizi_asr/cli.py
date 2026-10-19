@@ -128,9 +128,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--normalize",
-        choices=["default", "ethio", "oromo_fair", "none"],
+        choices=["default", "ethio", "oromo_platform", "oromo_fair", "none"],
         default=None,
-        help="Scoring text normalization (ethio = Ge'ez/Latin cleanup; oromo_fair = preserve mid-word hudhaa)",
+        help=(
+            "Scoring text normalization: ethio = Ge'ez/Latin cleanup; "
+            "oromo_platform = colleague tidy (NFKC, lower, punct→space, collapse); "
+            "oromo_fair = platform + hudhaa strip + spelling map + gemination collapse"
+        ),
     )
     p.add_argument("--omni-card", default=None, help="Override Omnilingual model card")
     p.add_argument(
@@ -176,6 +180,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-tokens", type=int, default=None, help="OpenRouter max output tokens")
     p.add_argument("--temperature", type=float, default=None, help="OpenRouter temperature")
     p.add_argument("--timeout-seconds", type=float, default=None, help="OpenRouter request timeout")
+    p.add_argument(
+        "--cropconcept-recipe",
+        action="store_true",
+        default=False,
+        help="Use exact CropConcept Ethiopia recipe (raw .m4a bytes as format=mp4, audio-first, sidecar language hint, JSON output)",
+    )
     p.add_argument("--resume", action="store_true", default=None)
     p.add_argument("--no-resume", action="store_true", default=False)
     p.add_argument("--env-file", type=Path, default=Path(".env"))
@@ -253,6 +263,8 @@ def apply_overrides(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, 
         openrouter["temperature"] = args.temperature
     if args.timeout_seconds is not None:
         openrouter["timeout_seconds"] = args.timeout_seconds
+    if getattr(args, "cropconcept_recipe", False):
+        openrouter["cropconcept_recipe"] = True
     raw["openrouter"] = openrouter
 
     if args.resume:

@@ -81,7 +81,14 @@ class CSVManifestLoader(BaseDatasetLoader):
         self.csv_path = Path(cfg.csv_path).expanduser().resolve()
         self.data_root = Path(cfg.data_root).expanduser().resolve() if cfg.data_root else None
 
-    def iter_samples(self) -> Iterator[AudioSample]:
+    def iter_samples(
+        self,
+        *,
+        skip_ids: Optional[set[str]] = None,
+        skip_waveform: bool = False,
+    ) -> Iterator[AudioSample]:
+        import numpy as np
+
         with self.csv_path.open(encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
             if reader.fieldnames is None:
@@ -108,10 +115,19 @@ class CSVManifestLoader(BaseDatasetLoader):
                 audio = _resolve_audio_path(
                     str(row["audio_path"]), self.csv_path.parent, self.data_root
                 )
-                array, sr = load_waveform(str(audio))
                 file_name = str(row.get("file_name") or audio.name)
+                sample_id = f"csv:{file_name}:{i}"
+                if skip_ids and sample_id in skip_ids:
+                    count += 1
+                    if self.cfg.max_samples is not None and count >= self.cfg.max_samples:
+                        break
+                    continue
+                if skip_waveform:
+                    array, sr = np.zeros(0, dtype=np.float32), 16000
+                else:
+                    array, sr = load_waveform(str(audio))
                 yield AudioSample(
-                    sample_id=f"csv:{file_name}:{i}",
+                    sample_id=sample_id,
                     language=LANG_DISPLAY.get(lang, lang),
                     language_config=lang,
                     reference=str(row["reference"]),

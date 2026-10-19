@@ -14,6 +14,9 @@ class OpenRouterConfig:
     max_tokens: int = 1024
     # None = send the whole clip in one request (no VAD chunking)
     max_chunk_seconds: Optional[float] = 30.0
+    # Use the exact CropConcept Ethiopia recipe (raw .m4a bytes as format='mp4',
+    # audio-first content order, sidecar language hint, JSON {"language","text"} output, no max_tokens)
+    cropconcept_recipe: bool = False
 
 
 def _parse_chunk_seconds(value: Any) -> Optional[float]:
@@ -25,7 +28,10 @@ def _parse_chunk_seconds(value: Any) -> Optional[float]:
 
 @dataclass
 class NormalizationConfig:
-    # mode: default | ethio | none  (ethio = Ge'ez homophone cleanup from ndizi_eval)
+    # mode: default | ethio | oromo_platform | oromo_fair | none
+    #   ethio = Ge'ez homophone cleanup from ndizi_eval
+    #   oromo_platform = colleague CropConcept tidy (NFKC/lower/punct→space)
+    #   oromo_fair = platform + hudhaa/spelling/gemination for bake-offs
     mode: str = "default"
     lowercase: bool = True
     strip_punctuation: bool = True
@@ -226,6 +232,7 @@ def load_run_config(raw: dict[str, Any]) -> RunConfig:
             temperature=float(or_raw.get("temperature", 0.0)),
             max_tokens=int(or_raw.get("max_tokens", 1024)),
             max_chunk_seconds=_parse_chunk_seconds(or_raw.get("max_chunk_seconds", 30.0)),
+            cropconcept_recipe=bool(or_raw.get("cropconcept_recipe", False)),
         ),
         local_whisper=LocalModelConfig(
             device=local_raw.get("device"),

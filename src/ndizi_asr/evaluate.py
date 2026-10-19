@@ -209,9 +209,19 @@ class BenchmarkRunner:
         logger.info("Wrote summary to %s", summary_path)
         return summary
 
-    def _iter_pending_samples(self, done_ids: set[str], language_filter: Optional[str]):
+    def _iter_pending_samples(
+        self,
+        done_ids: set[str],
+        language_filter: Optional[str],
+        *,
+        skip_waveform: bool = False,
+    ):
         loader = build_loader(self.config.dataset)
-        for sample in loader.iter_samples():
+        try:
+            it = loader.iter_samples(skip_ids=done_ids, skip_waveform=skip_waveform)
+        except TypeError:
+            it = loader.iter_samples()
+        for sample in it:
             if not _lang_matches_filter(sample, language_filter):
                 continue
             if sample.sample_id not in done_ids:
@@ -237,7 +247,13 @@ class BenchmarkRunner:
                     done_ids.add(str(row.get("sample_id")))
             logger.info("Resuming %s with %d existing predictions", model, len(done_ids))
 
-        pending = self._iter_pending_samples(done_ids, spec.language_filter)
+        skip_waveform = (
+            spec.backend == "our_transcript"
+            or (spec.backend == "openrouter" and self.config.openrouter.cropconcept_recipe)
+        )
+        pending = self._iter_pending_samples(
+            done_ids, spec.language_filter, skip_waveform=skip_waveform
+        )
         logger.info(
             "Model %s [%s]: streaming pending samples (skipping %d already done)%s",
             spec.model_id,
@@ -305,12 +321,19 @@ class BenchmarkRunner:
                     error=None if our_tx else "Missing our_transcript in sample metadata",
                 )
             else:
-                result = self._transcribe_openrouter_chunked(
-                    model_id=spec.model_id,
-                    array=sample.audio_array,
-                    sampling_rate=sample.sampling_rate,
-                    language=sample.language,
-                )
+                audio_path_meta = str((sample.meta or {}).get("audio_path") or "").strip()
+                if self.config.openrouter.cropconcept_recipe and audio_path_meta and Path(audio_path_meta).is_file():
+                    result = self._get_openrouter().transcribe_cropconcept_recipe(
+                        model=spec.model_id,
+                        audio_path=audio_path_meta,
+                    )
+                else:
+                    result = self._transcribe_openrouter_chunked(
+                        model_id=spec.model_id,
+                        array=sample.audio_array,
+                        sampling_rate=sample.sampling_rate,
+                        language=sample.language,
+                    )
             pred = result.text
             our_tx_meta = str((sample.meta or {}).get("our_transcript") or "").strip()
             ref_ratio = _compute_ref_ratio(sample.reference, our_tx_meta) if our_tx_meta else None

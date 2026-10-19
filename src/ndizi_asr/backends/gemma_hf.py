@@ -9,12 +9,24 @@ from typing import Optional
 
 import numpy as np
 
+from ..audio import join_chunk_transcripts, maybe_chunk
 from .types import TranscriptionResult
 
 logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16000
 MAX_SECONDS = 30.0
+
+GEMMA_LANG_PROMPTS: dict[str, str] = {
+    "am": "ይህን ንግግር በአማርኛ ጻፍ። ውጤቱ ጽሑፍ ብቻ ይሁን።",
+    "amharic": "ይህን ንግግር በአማርኛ ጻፍ። ውጤቱ ጽሑፍ ብቻ ይሁን።",
+    "om": "Dubbii kana Afaan Oromootiin barreessi. Barreeffama qofa baasi.",
+    "orm": "Dubbii kana Afaan Oromootiin barreessi. Barreeffama qofa baasi.",
+    "oromo": "Dubbii kana Afaan Oromootiin barreessi. Barreeffama qofa baasi.",
+    "sw": "Andika maneno unayosikia katika sauti hii.",
+    "swa": "Andika maneno unayosikia katika sauti hii.",
+    "swahili": "Andika maneno unayosikia katika sauti hii.",
+}
 
 
 def _hf_token() -> Optional[str]:
@@ -62,13 +74,16 @@ def _prepare_wave(audio_array: np.ndarray, sampling_rate: int) -> np.ndarray:
     wave = _resample_linear(np.asarray(audio_array), int(sampling_rate), SAMPLE_RATE)
     if wave.ndim > 1:
         wave = wave.mean(axis=-1)
-    max_samples = int(MAX_SECONDS * SAMPLE_RATE)
-    if len(wave) > max_samples:
-        wave = wave[:max_samples]
     return np.ascontiguousarray(wave, dtype=np.float32)
 
 
-def _default_instruction(language: Optional[str]) -> str:
+def _default_instruction(language: Optional[str], language_config: Optional[str] = None) -> str:
+    for candidate in (language_config, language):
+        if not candidate:
+            continue
+        key = str(candidate).strip().lower()
+        if key in GEMMA_LANG_PROMPTS:
+            return GEMMA_LANG_PROMPTS[key]
     if language and language.lower() not in {"default", "unknown"}:
         return (
             f"Transcribe the following speech segment in {language} exactly. "
@@ -166,12 +181,13 @@ class HuggingFaceGemmaASRClient:
         language_config: Optional[str] = None,
         prompt: Optional[str] = None,
     ) -> TranscriptionResult:
-        del language_config  # unused; instruction uses friendly language name
         started = time.perf_counter()
         try:
             wave = _prepare_wave(audio_array, sampling_rate)
-            instruction = (prompt or "").strip() or _default_instruction(language)
-            text = self._transcribe_wave(wave, instruction)
+            instruction = (prompt or "").strip() or _default_instruction(language, language_config)
+            chunks, _ = maybe_chunk(wave, SAMPLE_RATE, MAX_SECONDS)
+            parts = [self._transcribe_wave(c, instruction) for c in chunks]
+            text = join_chunk_transcripts(parts)
             return TranscriptionResult(
                 text=text,
                 latency_seconds=time.perf_counter() - started,
