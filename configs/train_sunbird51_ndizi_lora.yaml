@@ -30,7 +30,8 @@ extra:
   max_input_seconds: 30
   label_max_length: 448
   freeze_encoder: true
-  label_smoothing_factor: 0.05
+  # Must stay 0: label smoothing pops labels before Whisper forward (breaks decoder_input_ids).
+  label_smoothing_factor: 0.0
   lr_scheduler_type: cosine
   save_merged: true
   lora_r: 32

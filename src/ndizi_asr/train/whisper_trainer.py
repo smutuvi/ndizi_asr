@@ -170,13 +170,18 @@ def _guard_whisper_decoder_kwargs(model: Any) -> Any:
 
         base.forward = gen_forward  # type: ignore[method-assign]
 
-    # 3) Inner WhisperModel.forward (where the ValueError is raised)
+    # 3) Inner WhisperModel.forward — also strip kwargs that leak into decoder(**kwargs)
     whisper_model = getattr(base, "model", None)
     if whisper_model is not None and hasattr(whisper_model, "forward"):
         inner_fwd = whisper_model.forward
 
         def inner_forward(*args, **kwargs):
-            return inner_fwd(*args, **_drop_conflicting_decoder_embeds(kwargs))
+            kwargs = _drop_conflicting_decoder_embeds(kwargs)
+            kwargs.pop("inputs_embeds", None)
+            # Prefer token ids when both somehow remain as explicit args on the model call
+            if kwargs.get("decoder_input_ids") is not None:
+                kwargs["decoder_inputs_embeds"] = None
+            return inner_fwd(*args, **kwargs)
 
         whisper_model.forward = inner_forward  # type: ignore[method-assign]
 
@@ -184,11 +189,36 @@ def _guard_whisper_decoder_kwargs(model: Any) -> Any:
     return model
 
 
+def _ensure_decoder_input_ids(model: Any, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    """Whisper needs decoder_input_ids when Trainer label-smoothing pops ``labels``.
+
+    In transformers≥4.x/5.x the decoder check is XOR-based, so *neither* ids nor embeds
+    raises the misleading error: "cannot specify both decoder_input_ids and …embeds".
+    """
+    inputs = dict(inputs)
+    inputs.pop("decoder_inputs_embeds", None)
+    inputs.pop("inputs_embeds", None)
+    if inputs.get("decoder_input_ids") is not None or "labels" not in inputs:
+        return inputs
+    from transformers.models.whisper.modeling_whisper import shift_tokens_right
+
+    base = model.get_base_model() if hasattr(model, "get_base_model") else model
+    cfg = base.config
+    labels = inputs["labels"]
+    # shift_tokens_right treats -100 poorly; map pad for the shift only
+    shift_labels = labels.clone()
+    shift_labels[shift_labels == -100] = cfg.pad_token_id
+    inputs["decoder_input_ids"] = shift_tokens_right(
+        shift_labels, cfg.pad_token_id, cfg.decoder_start_token_id
+    )
+    return inputs
+
+
 class _WhisperSeq2SeqTrainer(Seq2SeqTrainer):
-    """Drop decoder_inputs_embeds if Trainer/PEFT ever injects both paths."""
+    """Ensure decoder_input_ids survive label-smoothing; drop conflicting embeds."""
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-        inputs = _drop_conflicting_decoder_embeds(dict(inputs))
+        inputs = _ensure_decoder_input_ids(model, _drop_conflicting_decoder_embeds(dict(inputs)))
         try:
             return super().compute_loss(
                 model, inputs, return_outputs=return_outputs, num_items_in_batch=num_items_in_batch
@@ -362,6 +392,8 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         logging_steps=cfg.logging_steps,
         predict_with_generate=True,
         generation_max_length=min(label_max, 444),
+        # Whisper + label_smoothing pops labels before forward; without decoder_input_ids
+        # transformers 5.x raises a misleading "both ids and embeds" XOR error. Default off.
         label_smoothing_factor=float(cfg.extra.get("label_smoothing_factor", 0.0)),
         lr_scheduler_type=str(cfg.extra.get("lr_scheduler_type", "cosine")),
         report_to=[],
