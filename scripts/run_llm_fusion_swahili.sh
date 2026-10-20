@@ -23,10 +23,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
-EDITOR="${EDITOR:-gemini}"
-EXPERIMENT="${EXPERIMENT:-llm_fusion_swahili_full}"
+EDITOR="${EDITOR:-gemini-4-argon}"
+EXPERIMENT="${EXPERIMENT:-llm_fusion_ndizi1sw_argon_fs8}"
 CONFIG="${CONFIG:-${ROOT}/configs/swahili_fusion.yaml}"
-ASR_MODELS="${ASR_MODELS:-ndizi-whisper-turbo w2v-bert-swahili sunbird-whisper-51}"
+ASR_MODELS="${ASR_MODELS:-ndizi-whisper-turbo sunflower-asr-51 w2v-bert-swahili}"
+GLOSSARY="${GLOSSARY:-${ROOT}/configs/glossary_ndizi_swahili.txt}"
 
 REUSE_ARGS=()
 if [[ -n "${REUSE_HYPS:-}" ]]; then
@@ -42,6 +43,11 @@ elif [[ -f "${ROOT}/results/llm_fusion_swahili_full/fusion_predictions.jsonl" \
   echo "Reusing ASR hyps: ${REUSE_ARGS[1]}"
 fi
 
+GLOSSARY_ARGS=()
+if [[ -f "$GLOSSARY" ]]; then
+  GLOSSARY_ARGS=(--glossary "$GLOSSARY")
+fi
+
 # shellcheck disable=SC2086
 python -m ndizi_asr.ensemble \
   --env-file .env \
@@ -49,6 +55,7 @@ python -m ndizi_asr.ensemble \
   --asr-models $ASR_MODELS \
   --editor "$EDITOR" \
   --normalize default \
+  "${GLOSSARY_ARGS[@]}" \
   "${REUSE_ARGS[@]}" \
   --output-dir results \
   --experiment-name "$EXPERIMENT" \

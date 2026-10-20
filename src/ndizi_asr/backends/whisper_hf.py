@@ -37,8 +37,27 @@ _OPENAI_WHISPER_LANG: dict[str, str] = {
 
 
 def _is_sunbird_whisper(model_id: str) -> bool:
+    from pathlib import Path
+    import json
+
     mid = model_id.lower()
-    return "sunbird" in mid or "asr-whisper-51" in mid
+    if "sunbird" in mid or "asr-whisper-51" in mid or "sunflower" in mid:
+        return True
+    p = Path(model_id).expanduser()
+    if p.is_dir():
+        for fname in ("adapter_config.json", "config.json"):
+            f = p / fname
+            if f.is_file():
+                try:
+                    data = json.loads(f.read_text(encoding="utf-8"))
+                    base = str(
+                        data.get("base_model_name_or_path") or data.get("_name_or_path") or ""
+                    ).lower()
+                    if "sunbird" in base or "asr-whisper-51" in base or "sunflower" in base:
+                        return True
+                except Exception:  # noqa: BLE001
+                    pass
+    return False
 
 
 def _openai_whisper_language(language: Optional[str], language_config: Optional[str]) -> Optional[str]:
@@ -166,12 +185,34 @@ class HuggingFaceWhisperClient:
         )
         load_kwargs = {"token": hf_token} if hf_token else {}
         try:
-            self.processor = WhisperProcessor.from_pretrained(model_id, **load_kwargs)
-            self.model = WhisperForConditionalGeneration.from_pretrained(
-                model_id,
-                torch_dtype=resolved_dtype,
-                **load_kwargs,
-            ).to(self.device)
+            from pathlib import Path
+            import json
+
+            local_dir = Path(model_id).expanduser()
+            adapter_cfg = local_dir / "adapter_config.json" if local_dir.is_dir() else None
+            if adapter_cfg is not None and adapter_cfg.is_file():
+                from peft import PeftModel
+
+                adata = json.loads(adapter_cfg.read_text(encoding="utf-8"))
+                base_id = str(adata.get("base_model_name_or_path") or "Sunbird/SunflowerASR-51-african-languages")
+                try:
+                    self.processor = WhisperProcessor.from_pretrained(model_id, **load_kwargs)
+                except Exception:  # noqa: BLE001
+                    self.processor = WhisperProcessor.from_pretrained(base_id, **load_kwargs)
+                base_model = WhisperForConditionalGeneration.from_pretrained(
+                    base_id,
+                    torch_dtype=resolved_dtype,
+                    **load_kwargs,
+                )
+                peft_model = PeftModel.from_pretrained(base_model, model_id, **load_kwargs)
+                self.model = peft_model.merge_and_unload().to(self.device)
+            else:
+                self.processor = WhisperProcessor.from_pretrained(model_id, **load_kwargs)
+                self.model = WhisperForConditionalGeneration.from_pretrained(
+                    model_id,
+                    torch_dtype=resolved_dtype,
+                    **load_kwargs,
+                ).to(self.device)
         except Exception as exc:  # noqa: BLE001
             name = exc.__class__.__name__
             msg = str(exc).lower()

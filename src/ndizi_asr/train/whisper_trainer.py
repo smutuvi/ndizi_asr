@@ -119,6 +119,11 @@ def _set_language_forcing(model: WhisperForConditionalGeneration, processor: Whi
         model.generation_config.forced_decoder_ids = forced
         model.generation_config.task = "transcribe"
     model.config.forced_decoder_ids = forced
+    # Ensure training labels use the exact same language + transcribe prefix token IDs
+    try:
+        tok.prefix_tokens = [lang_id, transcribe_id, notimestamps_id]
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _apply_lora(model: WhisperForConditionalGeneration, cfg: "TrainConfig"):
@@ -199,6 +204,10 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         model.generation_config.forced_decoder_ids = None
     _set_language_forcing(model, processor, lang_code)
 
+    if bool(cfg.extra.get("freeze_encoder", False)) and hasattr(model, "freeze_encoder"):
+        logger.info("Freezing Whisper acoustic encoder (decoder-only adaptation)")
+        model.freeze_encoder()
+
     if cfg.lora:
         model = _apply_lora(model, cfg)
     if cfg.extra.get("gradient_checkpointing", True):
@@ -237,7 +246,7 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
 
     out_dir = str(Path(cfg.output_dir) / cfg.experiment_name)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
-    wer_metric = evaluate.load("wer")
+    from jiwer import cer as jiwer_cer, wer as jiwer_wer
 
     def compute_metrics(pred):
         pred_ids = pred.predictions
@@ -247,7 +256,14 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         label_ids = np.where(label_ids != -100, label_ids, processor.tokenizer.pad_token_id)
         pred_str = processor.tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
         label_str = processor.tokenizer.batch_decode(label_ids, skip_special_tokens=True)
-        return {"wer": float(wer_metric.compute(predictions=pred_str, references=label_str))}
+        pairs = [(r.strip(), p.strip()) for r, p in zip(label_str, pred_str) if r.strip()]
+        if not pairs:
+            return {"wer": 0.0, "cer": 0.0}
+        refs, hyps = zip(*pairs)
+        return {
+            "wer": float(jiwer_wer(list(refs), list(hyps))),
+            "cer": float(jiwer_cer(list(refs), list(hyps))),
+        }
 
     use_bf16 = bool(cfg.extra.get("bf16", False))
     use_fp16 = bool(cfg.fp16) and not use_bf16 and torch.cuda.is_available()
@@ -268,7 +284,9 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         save_strategy="epoch",
         logging_steps=cfg.logging_steps,
         predict_with_generate=True,
-        generation_max_length=min(label_max, 225),
+        generation_max_length=min(label_max, 444),
+        label_smoothing_factor=float(cfg.extra.get("label_smoothing_factor", 0.0)),
+        lr_scheduler_type=str(cfg.extra.get("lr_scheduler_type", "cosine")),
         report_to=[],
         remove_unused_columns=False,
         label_names=["labels"],
@@ -303,6 +321,13 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
     train_result = trainer.train()
     trainer.save_model(out_dir)
     processor.save_pretrained(out_dir)
+    if cfg.lora and bool(cfg.extra.get("save_merged", True)) and hasattr(model, "merge_and_unload"):
+        merged_dir = Path(out_dir) / "merged"
+        merged_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Saving merged standalone Whisper model to %s", merged_dir)
+        merged_model = model.merge_and_unload()
+        merged_model.save_pretrained(str(merged_dir))
+        processor.save_pretrained(str(merged_dir))
 
     metrics = dict(train_result.metrics)
     if eval_ds is not None:

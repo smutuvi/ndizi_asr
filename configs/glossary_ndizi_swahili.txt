@@ -1,0 +1,10 @@
+Kiswahili farmer survey orthography and domain conventions (smutuvi/ndizi-1-sw):
+1. Bantu relative & negative verb forms MUST be written as a single joined word (never split after -cho/-po/-vyo):
+   - unachokipenda, unachokiona, kisichokupendeza, ninachokipenda, nilichokipenda, nisichokipenda, usichokipenda, kinachonipendeza, kilichonipendeza, vilivyo, nilivyoeleza
+   - inazaa, yanazaa, yanakuwa, imekua, imeota, imekauka, imenyauka, inavumilia, yanavumilia
+2. Multi-word conjunctions:
+   - Write as two words: kwa sababu, kwa hiyo, kwa hivyo, vile vile, sasa hivi
+3. Standard Kiswahili survey vocabulary & variety labels:
+   - Variety labels: aina A, aina B, aina C, aina D (capitalize variety letter A/B/C/D)
+   - Agronomy terms: maharage, mbegu, mvua, ukame, jua, maua, uzao, mavuno, afya, wadudu, magonjwa, mbolea, dawa, udongo, majani, mizizi, kupanda, kuotesha, kuvuna, kupika, radha/ladha, soko
+   - Standard spellings: kuhusu (not kuusu), vizuri (not vizuli), nzuri (not nzuli), mzuri (not mzuli), maua (not mauwa), maharage (not marage/maarage)

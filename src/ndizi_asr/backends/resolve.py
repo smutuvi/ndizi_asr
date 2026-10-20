@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 LOCAL_WHISPER_PREFIXES = (
     "Sunbird/asr-whisper",
+    "Sunbird/SunflowerASR",
     "openai/whisper-",
     "distil-whisper/",
     "smutuvi/ndizi-whisper",
@@ -42,10 +43,21 @@ _GEMMA_CONFIG_TYPES = frozenset({"gemma3", "gemma2", "gemma", "paligemma"})
 
 
 def _peek_hf_model_type(model_id: str) -> Optional[str]:
-    """Read model_type from a local checkpoint config.json if present."""
+    """Read model_type from a local checkpoint config.json or adapter_config.json if present."""
     path = Path(model_id).expanduser()
-    cfg_path = path / "config.json" if path.is_dir() else None
-    if cfg_path is None or not cfg_path.is_file():
+    if not path.is_dir():
+        return None
+    adapter_cfg = path / "adapter_config.json"
+    if adapter_cfg.is_file():
+        try:
+            adata = json.loads(adapter_cfg.read_text(encoding="utf-8"))
+            base = str(adata.get("base_model_name_or_path") or "").lower()
+            if "whisper" in base or "sunflower" in base or "sunbird" in base:
+                return "whisper"
+        except (OSError, json.JSONDecodeError):
+            pass
+    cfg_path = path / "config.json"
+    if not cfg_path.is_file():
         return None
     try:
         data = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -114,7 +126,10 @@ MODEL_ALIASES: dict[str, str] = {
     "ethio-asr-oromo": "badrex/Ethio-ASR-oromo",
     "ethio-asr-multilingual-1b": "badrex/Ethio-ASR-multilingual-1B",
     "sunbird-whisper-salt": "Sunbird/asr-whisper-large-v3-salt",
-    "sunbird-whisper-51": "Sunbird/asr-whisper-51-african-languages",
+    "sunbird-whisper-51": "Sunbird/SunflowerASR-51-african-languages",
+    "sunflower-asr-51": "Sunbird/SunflowerASR-51-african-languages",
+    "sunflower-asr": "Sunbird/SunflowerASR-51-african-languages",
+    "sunflower-51": "Sunbird/SunflowerASR-51-african-languages",
     "ndizi-gemma4-merged": "smutuvi/ndizi-gemma4-e2b-african-asr-merged",
     "our-transcript": "our_transcript",
     "our_transcript": "our_transcript",
@@ -216,6 +231,7 @@ def _is_whisper_model(model_id: str) -> bool:
         model_id.startswith(LOCAL_WHISPER_PREFIXES)
         or "/whisper" in mid
         or "ndizi-whisper" in mid
+        or "sunflowerasr" in mid
     )
 
 

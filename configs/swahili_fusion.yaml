@@ -1,27 +1,21 @@
-# Smart fusion on Ndizi Swahili (HF Hub).
-# ASR: ndizi Whisper turbo + w2v-bert Swahili
-# Editor: Gemini 2.5 Flash (OpenRouter) — "gemma 2.5" in docs maps here
-#
-# streaming: true → only the test split is fetched on demand (no full dataset
-# materialization); max_samples stops after 50 rows per source.
-experiment_name: llm_fusion_swahili_fs8
+# Smart fusion on Ndizi Swahili (smutuvi/ndizi-1-sw test split, n=1,036).
+# ASR: smutuvi/ndizi-whisper-large-v3-turbo-optimized + Sunbird/SunflowerASR-51-african-languages + badrex/w2v-bert-2.0-swahili-asr
+# Editor: google/gemini-4-argon (OpenRouter)
+experiment_name: llm_fusion_ndizi1sw_argon_fs8
 
 dataset:
   type: huggingface
   language: swahili
   split: test
   audio_column: audio
-  text_column: text
-  streaming: true
+  text_column: transcript
+  streaming: false
   sources:
-    - dataset_id: smutuvi/ndizi-1
+    - dataset_id: smutuvi/ndizi-1-sw
       split: test
       language: swahili
-      max_samples: 50
-    - dataset_id: smutuvi/ndizi-1-2025
-      split: test
-      language: swahili
-      max_samples: 50
+      audio_column: audio
+      text_column: transcript
 
 openrouter:
   base_url: https://openrouter.ai/api/v1

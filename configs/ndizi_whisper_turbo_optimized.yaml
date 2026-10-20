@@ -1,24 +1,25 @@
-# Evaluate smutuvi/ndizi-whisper-large-v3-turbo-optimized on Ndizi Swahili test sets.
-experiment_name: ndizi_whisper_turbo_optimized_eval
+# Evaluate smutuvi/ndizi-whisper-large-v3-turbo-optimized and Sunbird/SunflowerASR-51-african-languages
+# on the smutuvi/ndizi-1-sw held-out test split (n=1,036).
+experiment_name: ndizi1sw_baseline_vs_sunflower
 
 models:
   - smutuvi/ndizi-whisper-large-v3-turbo-optimized
+  - Sunbird/SunflowerASR-51-african-languages
 
 dataset:
   type: huggingface
   language: swahili
   split: test
   audio_column: audio
-  text_column: text
+  text_column: transcript
   max_samples: null
   streaming: false
   sources:
-    - dataset_id: smutuvi/ndizi-1
+    - dataset_id: smutuvi/ndizi-1-sw
       split: test
       language: swahili
-    - dataset_id: smutuvi/ndizi-1-2025
-      split: test
-      language: swahili
+      audio_column: audio
+      text_column: transcript
 
 local_whisper:
   device: null

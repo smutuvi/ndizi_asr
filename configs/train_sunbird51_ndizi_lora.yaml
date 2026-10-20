@@ -1,39 +1,40 @@
-# Sunbird Whisper-51 LoRA on Ndizi farm-interview Swahili.
+# SunflowerASR-51 LoRA fine-tuning on smutuvi/ndizi-1-sw (Ndizi Farmer Feedback Speech).
 # Train:
 #   pip install -e ".[train]"
 #   ndizi-asr-train --config configs/train_sunbird51_ndizi_lora.yaml --dry-run
 #   ndizi-asr-train --config configs/train_sunbird51_ndizi_lora.yaml
 
-# Optional top-level alias (also accepted under extra.dataset_ids):
-# dataset_id: smutuvi/ndizi-1
-experiment_name: sunbird51_ndizi_lora
+dataset_id: smutuvi/ndizi-1-sw
+experiment_name: sunflower51_ndizi1sw_lora
 backend: whisper
-model_id: Sunbird/asr-whisper-51-african-languages
+model_id: Sunbird/SunflowerASR-51-african-languages
 language: swahili
 audio_column: audio
-text_column: text
+text_column: transcript
 split: train
 eval_split: validation
 output_dir: outputs
-num_train_epochs: 3
+num_train_epochs: 5
 per_device_train_batch_size: 4
 gradient_accumulation_steps: 4
-learning_rate: 1.0e-4
-warmup_ratio: 0.05
+learning_rate: 5.0e-5
+warmup_ratio: 0.08
 fp16: true
 logging_steps: 25
 save_steps: 500
 lora: true
 
 extra:
-  # Merged Hub train/validation corpora (required when dataset_id is omitted)
   dataset_ids:
-    - smutuvi/ndizi-1
-    - smutuvi/ndizi-1-2025
+    - smutuvi/ndizi-1-sw
   max_input_seconds: 30
   label_max_length: 448
-  lora_r: 16
-  lora_alpha: 32
+  freeze_encoder: true
+  label_smoothing_factor: 0.05
+  lr_scheduler_type: cosine
+  save_merged: true
+  lora_r: 32
+  lora_alpha: 64
   lora_dropout: 0.05
   lora_target_modules:
     - q_proj
