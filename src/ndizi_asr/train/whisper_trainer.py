@@ -102,6 +102,13 @@ class DataCollatorSpeechSeq2SeqWithPadding:
 
 
 def _set_language_forcing(model: WhisperForConditionalGeneration, processor: WhisperProcessor, lang_code: str) -> None:
+    """Force language at *generation* time; keep model.config.forced_decoder_ids cleared for training.
+
+    Leaving forced_decoder_ids on ``model.config`` during Seq2SeqTrainer.train() makes newer
+    transformers pass both decoder_input_ids (from labels) and decoder_inputs_embeds, which
+    raises: ValueError: You cannot specify both decoder_input_ids and decoder_inputs_embeds.
+    Language for training comes from tokenizer prefix tokens baked into labels instead.
+    """
     tok = processor.tokenizer
     lang_id = LANGUAGE_TOKENS_WHISPER.get(lang_code)
     if lang_id is None:
@@ -111,19 +118,83 @@ def _set_language_forcing(model: WhisperForConditionalGeneration, processor: Whi
             lang_id = None
     if lang_id is None or lang_id < 0:
         logger.warning("No language token for %s; leaving decoder unconstrained", lang_code)
+        model.config.forced_decoder_ids = None
         return
     transcribe_id = tok.convert_tokens_to_ids("<|transcribe|>")
     notimestamps_id = tok.convert_tokens_to_ids("<|notimestamps|>")
     forced = [(1, lang_id), (2, transcribe_id), (3, notimestamps_id)]
     if hasattr(model, "generation_config") and model.generation_config is not None:
         model.generation_config.forced_decoder_ids = forced
+        model.generation_config.language = lang_code
         model.generation_config.task = "transcribe"
-    model.config.forced_decoder_ids = forced
-    # Ensure training labels use the exact same language + transcribe prefix token IDs
+    # Critical: must be None during training forward (labels already carry the prefix).
+    model.config.forced_decoder_ids = None
+    model.config.suppress_tokens = []
     try:
-        tok.prefix_tokens = [lang_id, transcribe_id, notimestamps_id]
+        tok.set_prefix_tokens(language=lang_code, task="transcribe", predict_timestamps=False)
     except Exception:  # noqa: BLE001
-        pass
+        try:
+            tok.prefix_tokens = [lang_id, transcribe_id, notimestamps_id]
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _drop_conflicting_decoder_embeds(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """PEFT/Trainer can inject decoder_inputs_embeds alongside decoder_input_ids (HF #39542)."""
+    if kwargs.get("decoder_input_ids") is not None:
+        kwargs = {k: v for k, v in kwargs.items() if k != "decoder_inputs_embeds"}
+    return kwargs
+
+
+def _guard_whisper_decoder_kwargs(model: Any) -> Any:
+    """Wrap PeftModel / Whisper forwards so ids and embeds never both reach the decoder."""
+    # 1) PeftModel.forward
+    if hasattr(model, "get_base_model"):
+        peft_fwd = model.forward
+
+        def peft_forward(*args, **kwargs):
+            return peft_fwd(*args, **_drop_conflicting_decoder_embeds(kwargs))
+
+        model.forward = peft_forward  # type: ignore[method-assign]
+
+        base = model.get_base_model()
+    else:
+        base = model
+
+    # 2) WhisperForConditionalGeneration.forward
+    if hasattr(base, "forward"):
+        gen_fwd = base.forward
+
+        def gen_forward(*args, **kwargs):
+            return gen_fwd(*args, **_drop_conflicting_decoder_embeds(kwargs))
+
+        base.forward = gen_forward  # type: ignore[method-assign]
+
+    # 3) Inner WhisperModel.forward (where the ValueError is raised)
+    whisper_model = getattr(base, "model", None)
+    if whisper_model is not None and hasattr(whisper_model, "forward"):
+        inner_fwd = whisper_model.forward
+
+        def inner_forward(*args, **kwargs):
+            return inner_fwd(*args, **_drop_conflicting_decoder_embeds(kwargs))
+
+        whisper_model.forward = inner_forward  # type: ignore[method-assign]
+
+    logger.info("Guarded Whisper forward against decoder_input_ids + decoder_inputs_embeds clash")
+    return model
+
+
+class _WhisperSeq2SeqTrainer(Seq2SeqTrainer):
+    """Drop decoder_inputs_embeds if Trainer/PEFT ever injects both paths."""
+
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        inputs = _drop_conflicting_decoder_embeds(dict(inputs))
+        try:
+            return super().compute_loss(
+                model, inputs, return_outputs=return_outputs, num_items_in_batch=num_items_in_batch
+            )
+        except TypeError:
+            return super().compute_loss(model, inputs, return_outputs=return_outputs)
 
 
 def _apply_lora(model: WhisperForConditionalGeneration, cfg: "TrainConfig"):
@@ -210,11 +281,17 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
 
     if cfg.lora:
         model = _apply_lora(model, cfg)
+    # Re-assert after PEFT wrap (some peft/transformers versions restore forced ids).
+    model.config.forced_decoder_ids = None
+    if hasattr(model, "config"):
+        model.config.suppress_tokens = []
     if cfg.extra.get("gradient_checkpointing", True):
         model.config.use_cache = False
         if hasattr(model, "enable_input_require_grads"):
             model.enable_input_require_grads()
         model.gradient_checkpointing_enable()
+    # PEFT + Trainer can inject decoder_inputs_embeds alongside decoder_input_ids (HF #39542).
+    model = _guard_whisper_decoder_kwargs(model)
 
     def prepare(batch: dict) -> dict:
         audio = batch[audio_col]
@@ -307,9 +384,9 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
     )
     # transformers API: processing_class (new) vs tokenizer (old)
     try:
-        trainer = Seq2SeqTrainer(**trainer_kwargs, processing_class=processor)
+        trainer = _WhisperSeq2SeqTrainer(**trainer_kwargs, processing_class=processor)
     except TypeError:
-        trainer = Seq2SeqTrainer(**trainer_kwargs, tokenizer=processor)
+        trainer = _WhisperSeq2SeqTrainer(**trainer_kwargs, tokenizer=processor)
 
     logger.info(
         "Starting train: n_train=%s n_eval=%s lora=%s model=%s",
