@@ -570,18 +570,19 @@ def _alias_keys_for_sample(sample_id: str, file_name: str = "") -> List[str]:
         m = re.match(r"^csv:(.+):\d+$", raw)
         if m:
             keys.append(m.group(1))
-        # cropconcept:{media_id}:{i}
-        m = re.match(r"^cropconcept:([^:]+):\d+$", raw)
-        if m:
-            keys.append(m.group(1))
-        # bare stem / with common audio extensions
-        stem = Path(raw.split(":")[-1] if ":" in raw else raw).name
-        keys.append(stem)
-        if "." not in stem:
+            raw = m.group(1)  # continue aliasing from the file_name portion
+        else:
+            m = re.match(r"^cropconcept:([^:]+):\d+$", raw)
+            if m:
+                keys.append(m.group(1))
+                raw = m.group(1)
+        name = Path(raw).name
+        keys.append(name)
+        stem = Path(name).stem
+        if stem and stem != name:
+            keys.append(stem)
             for ext in (".m4a", ".wav", ".mp3", ".flac", ".ogg"):
                 keys.append(stem + ext)
-        else:
-            keys.append(Path(stem).stem)
     # preserve order, drop empties/dupes
     seen: Set[str] = set()
     out: List[str] = []
