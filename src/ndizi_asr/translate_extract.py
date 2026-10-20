@@ -558,35 +558,83 @@ def call_openrouter_extract_insights(
     }
 
 
+def _alias_keys_for_sample(sample_id: str, file_name: str = "") -> List[str]:
+    """Build lookup aliases so `csv:om_64_….m4a:0` joins to manifest `om_64_….m4a`."""
+    keys: List[str] = []
+    for raw in (sample_id, file_name):
+        raw = (raw or "").strip()
+        if not raw:
+            continue
+        keys.append(raw)
+        # ndizi_asr CSV loader ids look like: csv:{file_name}:{row_index}
+        m = re.match(r"^csv:(.+):\d+$", raw)
+        if m:
+            keys.append(m.group(1))
+        # cropconcept:{media_id}:{i}
+        m = re.match(r"^cropconcept:([^:]+):\d+$", raw)
+        if m:
+            keys.append(m.group(1))
+        # bare stem / with common audio extensions
+        stem = Path(raw.split(":")[-1] if ":" in raw else raw).name
+        keys.append(stem)
+        if "." not in stem:
+            for ext in (".m4a", ".wav", ".mp3", ".flac", ".ogg"):
+                keys.append(stem + ext)
+        else:
+            keys.append(Path(stem).stem)
+    # preserve order, drop empties/dupes
+    seen: Set[str] = set()
+    out: List[str] = []
+    for k in keys:
+        if k and k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
 def _load_asr_map(
     asr_path: Path,
     asr_col: str = "prediction",
 ) -> Tuple[Dict[str, str], Dict[str, float]]:
-    """Return (id -> ASR transcript, id -> ref_ratio if present in predictions file)."""
+    """Return (id -> ASR transcript, id -> ref_ratio if present in predictions file).
+
+    Indexes every row under several aliases (`sample_id`, bare `file_name`, stem)
+    so `csv:om_64_….m4a:0` joins cleanly to the CropConcept manifest `file_name`.
+    """
     out: Dict[str, str] = {}
     ratios: Dict[str, float] = {}
+
+    def _store(keys: Sequence[str], text: str, ratio: Optional[float]) -> None:
+        for k in keys:
+            out[k] = text
+            if ratio is not None:
+                ratios[k] = ratio
+
     if asr_path.suffix.lower() == ".jsonl":
         for line in asr_path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             r = json.loads(line)
             sid = str(r.get("sample_id") or r.get("file_name") or "")
-            if not sid:
+            fn = str((r.get("metadata") or {}).get("file_name") or r.get("file_name") or "")
+            if not sid and not fn:
                 continue
+            text = ""
             if asr_col in r and isinstance(r[asr_col], str):
-                out[sid] = r[asr_col]
+                text = r[asr_col]
             elif isinstance(r.get("hypotheses"), dict) and asr_col in r["hypotheses"]:
-                out[sid] = str(r["hypotheses"][asr_col] or "")
+                text = str(r["hypotheses"][asr_col] or "")
             elif "prediction" in r:
-                out[sid] = str(r.get("prediction") or "")
-            if r.get("ref_ratio") is not None:
-                ratios[sid] = float(r["ref_ratio"])
+                text = str(r.get("prediction") or "")
+            ratio = float(r["ref_ratio"]) if r.get("ref_ratio") is not None else None
+            _store(_alias_keys_for_sample(sid, fn), text, ratio)
         return out, ratios
 
     with asr_path.open(encoding="utf-8") as f:
         for r in csv.DictReader(f):
-            key = str(r.get("sample_id") or r.get("file_name") or "")
-            if not key:
+            sid = str(r.get("sample_id") or "")
+            fn = str(r.get("file_name") or "")
+            if not sid and not fn:
                 continue
             val = r.get(asr_col)
             if val is None:
@@ -594,12 +642,13 @@ def _load_asr_map(
                     if fallback in r:
                         val = r[fallback]
                         break
-            out[key] = str(val or "")
+            ratio = None
             if r.get("ref_ratio"):
                 try:
-                    ratios[key] = float(r["ref_ratio"])
+                    ratio = float(r["ref_ratio"])
                 except ValueError:
                     pass
+            _store(_alias_keys_for_sample(sid, fn), str(val or ""), ratio)
     return out, ratios
 
 
@@ -631,23 +680,30 @@ def run_translate_extract_pipeline(
         manifest_rows = list(csv.DictReader(f))
 
     records: List[Dict[str, Any]] = []
+    matched = 0
     for m in manifest_rows:
         fn = m.get("file_name") or m.get("sample_id") or ""
         sid = m.get("sample_id") or fn
-        hyp = asr_map.get(sid) if sid in asr_map else asr_map.get(fn, "")
-        if hyp is None:
-            hyp = ""
+        hyp = ""
+        for key in _alias_keys_for_sample(sid, fn):
+            if key in asr_map and asr_map[key]:
+                hyp = asr_map[key]
+                break
+        if hyp:
+            matched += 1
         ref = m.get("reference") or m.get("corrected_transcript") or ""
         our = m.get("our_transcript") or hyp or ""
-        ratio = (
-            asr_ratios.get(sid)
-            or asr_ratios.get(fn)
-            or float(
+        ratio = None
+        for key in _alias_keys_for_sample(sid, fn):
+            if key in asr_ratios:
+                ratio = asr_ratios[key]
+                break
+        if ratio is None:
+            ratio = float(
                 m.get("ref_ratio")
                 or m.get("ratio")
                 or (len(ref.split()) / max(len(our.split()), 1))
             )
-        )
         records.append(
             {
                 "file_name": fn or sid,
@@ -662,6 +718,25 @@ def run_translate_extract_pipeline(
                 "sunbird_lexicon_tags": sorted(extract_taxonomy_tags(hyp)),
                 "sunbird_lexicon_nums": sorted(extract_number_concepts(hyp)),
             }
+        )
+
+    logger.info(
+        "Joined ASR predictions to manifest: %d / %d clips matched (non-empty hyp)",
+        matched,
+        len(records),
+    )
+    if matched == 0:
+        raise SystemExit(
+            "No ASR predictions joined to the manifest. "
+            f"Predictions look like sample_id=`csv:om_….m4a:0` while manifest uses "
+            f"file_name=`om_….m4a`. Check --asr-predictions / --asr-col. "
+            f"First prediction keys sample: {list(asr_map.keys())[:3]}"
+        )
+    if matched < len(records):
+        logger.warning(
+            "Only %d / %d clips have ASR text — remaining will score as empty.",
+            matched,
+            len(records),
         )
 
     if not skip_nllb:
