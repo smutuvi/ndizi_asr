@@ -459,6 +459,10 @@ def call_openrouter_glossary_translate(
 
     if not (transcript or "").strip():
         return ""
+    if "/" not in model_id:
+        from .ensemble import EDITOR_ALIASES
+
+        model_id = EDITOR_ALIASES.get(model_id, f"google/{model_id}")
     prompt = GLOSSARY_MT_PROMPT.format(
         question_id=question_id,
         question=question,
@@ -501,6 +505,15 @@ def call_openrouter_extract_insights(
 ) -> Dict[str, Any]:
     import requests
 
+    if not (oromo_text or "").strip() and not (english_translation or "").strip():
+        return {"tags": [], "tags_with_lexicon": [], "numbers": [], "farmer_summary_en": ""}
+
+    # Resolve short aliases like "gemini-4-argon" -> "google/gemini-4-argon"
+    if "/" not in model_id:
+        from .ensemble import EDITOR_ALIASES
+
+        model_id = EDITOR_ALIASES.get(model_id, f"google/{model_id}")
+
     base = TRANSLATED_INSIGHT_JSON_PROMPT.format(
         question_id=question_id,
         question=question,
@@ -537,8 +550,9 @@ def call_openrouter_extract_insights(
             llm_tags = {t for t in (parsed.get("tags") or []) if t in INSIGHT_TAXONOMY}
             en_sum = str(parsed.get("farmer_summary_en") or "")
             num_str = " ".join(str(x) for x in (parsed.get("numbers") or [])) + " " + en_sum
+            oromo_for_nums = oromo_text if (not english_translation or include_oromo_with_translation) else ""
             nums = extract_number_concepts_bilingual(
-                oromo_text,
+                oromo_for_nums,
                 (english_translation or "") + " " + num_str,
             )
             return {
@@ -621,12 +635,17 @@ def _load_asr_map(
             if not sid and not fn:
                 continue
             text = ""
+            hyps = r.get("hypotheses") if isinstance(r.get("hypotheses"), dict) else {}
             if asr_col in r and isinstance(r[asr_col], str):
                 text = r[asr_col]
-            elif isinstance(r.get("hypotheses"), dict) and asr_col in r["hypotheses"]:
-                text = str(r["hypotheses"][asr_col] or "")
+            elif asr_col in hyps:
+                text = str(hyps[asr_col] or "")
             elif "prediction" in r:
                 text = str(r.get("prediction") or "")
+            elif "sunbird-whisper-51" in hyps:
+                text = str(hyps["sunbird-whisper-51"] or "")
+            elif "fusion" in r and isinstance(r["fusion"], str):
+                text = r["fusion"]
             ratio = float(r["ref_ratio"]) if r.get("ref_ratio") is not None else None
             _store(_alias_keys_for_sample(sid, fn), text, ratio)
         return out, ratios
@@ -664,6 +683,7 @@ def run_translate_extract_pipeline(
     extractor_model: str = "google/gemini-4-argon",
     skip_nllb: bool = False,
     skip_glossary_mt: bool = False,
+    max_samples: Optional[int] = None,
     env_file: str = ".env",
     device: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -682,14 +702,21 @@ def run_translate_extract_pipeline(
 
     records: List[Dict[str, Any]] = []
     matched = 0
+    skipped_unmatched = 0
     for m in manifest_rows:
         fn = m.get("file_name") or m.get("sample_id") or ""
         sid = m.get("sample_id") or fn
         hyp = ""
+        in_asr_file = False
         for key in _alias_keys_for_sample(sid, fn):
-            if key in asr_map and asr_map[key]:
-                hyp = asr_map[key]
-                break
+            if key in asr_map:
+                in_asr_file = True
+                if asr_map[key]:
+                    hyp = asr_map[key]
+                    break
+        if not in_asr_file:
+            skipped_unmatched += 1
+            continue
         if hyp:
             matched += 1
         ref = m.get("reference") or m.get("corrected_transcript") or ""
@@ -720,12 +747,20 @@ def run_translate_extract_pipeline(
                 "sunbird_lexicon_nums": sorted(extract_number_concepts(hyp)),
             }
         )
+        if max_samples is not None and max_samples > 0 and len(records) >= max_samples:
+            break
 
     logger.info(
-        "Joined ASR predictions to manifest: %d / %d clips matched (non-empty hyp)",
+        "Joined ASR predictions to manifest: %d / %d clips matched (non-empty hyp; %d manifest rows not in ASR file)",
         matched,
         len(records),
+        skipped_unmatched,
     )
+    if matched == 0:
+        raise SystemExit(
+            f"ERROR: 0 / {len(records)} manifest clips matched non-empty ASR text from "
+            f"{asr_predictions} (asr_col={asr_col!r}). Check --asr-predictions and --asr-col."
+        )
     if matched == 0:
         raise SystemExit(
             "No ASR predictions joined to the manifest. "
@@ -927,6 +962,12 @@ def main(argv: Optional[List[str]] = None) -> None:
     p.add_argument("--extractor-model", default="google/gemini-4-argon")
     p.add_argument("--skip-nllb", action="store_true")
     p.add_argument("--skip-glossary-mt", action="store_true")
+    p.add_argument(
+        "--max-samples",
+        type=int,
+        default=None,
+        help="Cap number of clips for quick smoke tests (e.g. --max-samples 4)",
+    )
     p.add_argument("--env-file", default=".env")
     p.add_argument("--device", default=None)
     args = p.parse_args(argv)
@@ -942,6 +983,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         extractor_model=args.extractor_model,
         skip_nllb=args.skip_nllb,
         skip_glossary_mt=args.skip_glossary_mt,
+        max_samples=args.max_samples,
         env_file=args.env_file,
         device=args.device,
     )
