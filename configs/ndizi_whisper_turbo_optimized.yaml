@@ -13,7 +13,7 @@ dataset:
   audio_column: audio
   text_column: transcript
   max_samples: null
-  streaming: false
+  streaming: true
   sources:
     - dataset_id: smutuvi/ndizi-1-sw
       split: test
