@@ -243,7 +243,7 @@ def _ensure_decoder_input_ids(model: Any, inputs: Dict[str, Any]) -> Dict[str, A
 
 
 class _WhisperSeq2SeqTrainer(Seq2SeqTrainer):
-    """Ensure decoder_input_ids survive label-smoothing; drop conflicting embeds."""
+    """Whisper-safe Seq2SeqTrainer (decoder ids, generate kwargs)."""
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         inputs = _ensure_decoder_input_ids(model, _drop_conflicting_decoder_embeds(dict(inputs)))
@@ -253,6 +253,48 @@ class _WhisperSeq2SeqTrainer(Seq2SeqTrainer):
             )
         except TypeError:
             return super().compute_loss(model, inputs, return_outputs=return_outputs)
+
+    def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None, **gen_kwargs):
+        """Strip labels before generate — Whisper.generate rejects unused ``labels`` kwargs."""
+        if not self.args.predict_with_generate or prediction_loss_only:
+            return super().prediction_step(
+                model, inputs, prediction_loss_only=prediction_loss_only, ignore_keys=ignore_keys
+            )
+
+        # Seq2SeqTrainer keeps labels in generation_inputs; Whisper 5.x validate_model_kwargs errors.
+        # Temporarily wrap generate to drop non-audio kwargs.
+        base_generate = model.generate
+
+        def _generate_no_labels(*args, **kwargs):
+            for key in (
+                "labels",
+                "decoder_input_ids",
+                "decoder_attention_mask",
+                "decoder_inputs_embeds",
+            ):
+                kwargs.pop(key, None)
+            return base_generate(*args, **kwargs)
+
+        model.generate = _generate_no_labels  # type: ignore[method-assign]
+        try:
+            return super().prediction_step(
+                model,
+                inputs,
+                prediction_loss_only=prediction_loss_only,
+                ignore_keys=ignore_keys,
+                **gen_kwargs,
+            )
+        finally:
+            model.generate = base_generate  # type: ignore[method-assign]
+
+    def _maybe_log_save_evaluate(self, *args, **kwargs):
+        # Save before eval so a generate() crash does not lose the finished epoch.
+        if getattr(self.control, "should_evaluate", False) and getattr(self.control, "should_save", False):
+            trial = kwargs.get("trial", args[3] if len(args) > 3 else None)
+            model = kwargs.get("model", args[2] if len(args) > 2 else self.model)
+            self._save_checkpoint(model, trial)
+            self.control.should_save = False
+        return super()._maybe_log_save_evaluate(*args, **kwargs)
 
 
 def _apply_lora(model: WhisperForConditionalGeneration, cfg: "TrainConfig"):
