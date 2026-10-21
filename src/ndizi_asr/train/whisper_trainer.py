@@ -101,6 +101,25 @@ class DataCollatorSpeechSeq2SeqWithPadding:
         return batch
 
 
+# Sunbird ISO codes → English names expected by Whisper.generate / tokenizer.set_prefix_tokens.
+# (generate rejects "swa"; it wants "swahili".)
+_WHISPER_GENERATE_LANG_NAME: Dict[str, str] = {
+    "eng": "english",
+    "fra": "french",
+    "swa": "swahili",
+    "sna": "shona",
+    "yor": "yoruba",
+    "som": "somali",
+    "afr": "afrikaans",
+    "amh": "amharic",
+    "mlg": "malagasy",
+    "lin": "lingala",
+    "hau": "hausa",
+    "xho": "xhosa",
+    "zul": "zulu",
+}
+
+
 def _set_language_forcing(model: WhisperForConditionalGeneration, processor: WhisperProcessor, lang_code: str) -> None:
     """Force language at *generation* time; keep model.config.forced_decoder_ids cleared for training.
 
@@ -123,20 +142,29 @@ def _set_language_forcing(model: WhisperForConditionalGeneration, processor: Whi
     transcribe_id = tok.convert_tokens_to_ids("<|transcribe|>")
     notimestamps_id = tok.convert_tokens_to_ids("<|notimestamps|>")
     forced = [(1, lang_id), (2, transcribe_id), (3, notimestamps_id)]
+    # Whisper.generate wants English names ("swahili"), not Sunbird ISO codes ("swa").
+    whisper_lang_name = _WHISPER_GENERATE_LANG_NAME.get(lang_code)
     if hasattr(model, "generation_config") and model.generation_config is not None:
         model.generation_config.forced_decoder_ids = forced
-        model.generation_config.language = lang_code
+        model.generation_config.language = whisper_lang_name  # None for Sunbird-only langs (e.g. orm)
         model.generation_config.task = "transcribe"
     # Critical: must be None during training forward (labels already carry the prefix).
     model.config.forced_decoder_ids = None
     model.config.suppress_tokens = []
+    prefix_lang = whisper_lang_name or lang_code
     try:
-        tok.set_prefix_tokens(language=lang_code, task="transcribe", predict_timestamps=False)
+        tok.set_prefix_tokens(language=prefix_lang, task="transcribe", predict_timestamps=False)
     except Exception:  # noqa: BLE001
         try:
             tok.prefix_tokens = [lang_id, transcribe_id, notimestamps_id]
         except Exception:  # noqa: BLE001
             pass
+    logger.info(
+        "Whisper language forcing: sunbird=%s generate_lang=%s lang_token_id=%s",
+        lang_code,
+        whisper_lang_name,
+        lang_id,
+    )
 
 
 def _drop_conflicting_decoder_embeds(kwargs: Dict[str, Any]) -> Dict[str, Any]:
@@ -322,6 +350,13 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         model.gradient_checkpointing_enable()
     # PEFT + Trainer can inject decoder_inputs_embeds alongside decoder_input_ids (HF #39542).
     model = _guard_whisper_decoder_kwargs(model)
+    # Re-apply generate language after PEFT wrap (eval uses model.generate).
+    _set_language_forcing(
+        model.get_base_model() if hasattr(model, "get_base_model") else model,
+        processor,
+        lang_code,
+    )
+    model.config.forced_decoder_ids = None
 
     def prepare(batch: dict) -> dict:
         audio = batch[audio_col]
@@ -427,7 +462,11 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         cfg.lora,
         cfg.model_id,
     )
-    train_result = trainer.train()
+    resume_ckpt = cfg.extra.get("resume_from_checkpoint")
+    if resume_ckpt is True or resume_ckpt == "auto":
+        # Resume from latest checkpoint under output_dir if present
+        resume_ckpt = True
+    train_result = trainer.train(resume_from_checkpoint=resume_ckpt if resume_ckpt else None)
     trainer.save_model(out_dir)
     processor.save_pretrained(out_dir)
     if cfg.lora and bool(cfg.extra.get("save_merged", True)) and hasattr(model, "merge_and_unload"):
