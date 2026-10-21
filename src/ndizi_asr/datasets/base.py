@@ -77,11 +77,30 @@ def resolve_hub_audio_path(
     ) from last_err
 
 
+def _resolve_local_audio_path(path: str) -> str:
+    """Turn Hub virtual paths (``hf://datasets/...``) into a local cache file for ffmpeg."""
+    from pathlib import Path
+
+    if Path(path).exists():
+        return path
+    if not path.startswith("hf://"):
+        return path
+    from huggingface_hub import HfFileSystem, hf_hub_download
+
+    resolved = HfFileSystem().resolve_path(path)
+    return hf_hub_download(
+        repo_id=resolved.repo_id,
+        filename=resolved.path_in_repo,
+        repo_type=resolved.repo_type,
+        revision=resolved.revision,
+    )
+
+
 def _load_path_audio(path: str, target_sr: int = 16000) -> tuple[np.ndarray, int]:
     """Decode via ffmpeg/soundfile — avoids torchcodec PyTorch teardown crashes."""
     from ..audio import load_waveform
 
-    return load_waveform(path, target_sr=target_sr)
+    return load_waveform(_resolve_local_audio_path(path), target_sr=target_sr)
 
 
 def extract_audio(value: Any) -> tuple[np.ndarray, int]:
