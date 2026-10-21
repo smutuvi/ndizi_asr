@@ -163,8 +163,24 @@ def _load_via_soundfile(path: str, target_sr: int) -> Tuple[np.ndarray, int]:
     return wav.astype(np.float32), int(sr)
 
 
+def _resolve_hf_uri(path: str) -> str:
+    """Resolve ``hf://datasets/<repo>@<rev>/<file>`` virtual paths to local cache files."""
+    if not str(path).startswith("hf://"):
+        return str(path)
+    from huggingface_hub import HfFileSystem, hf_hub_download
+
+    resolved = HfFileSystem().resolve_path(str(path))
+    return hf_hub_download(
+        repo_id=resolved.repo_id,
+        filename=resolved.path_in_repo,
+        repo_type=resolved.repo_type,
+        revision=resolved.revision,
+    )
+
+
 def load_waveform(path: str, target_sr: int = TARGET_SR) -> Tuple[np.ndarray, int]:
     """Load mono float32 waveform resampled to target_sr."""
+    path = _resolve_hf_uri(path)
     suffix = Path(path).suffix.lower()
     if suffix in SOUNDFILE_SUFFIXES:
         try:
