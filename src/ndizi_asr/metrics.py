@@ -15,7 +15,23 @@ from .ethio_normalize import (
 )
 
 
-_PUNCT_TABLE = str.maketrans("", "", string.punctuation + "።፣፤፥፦፧፨።،؛؟«»\"'„“”‘’…–—")
+# Sentence/clause punctuation that should become a space when stripped (prevents
+# gluing words in references like "vizuri.ndio" or "aina B?nisichopenda").
+_SPACE_PUNCT_RE = re.compile(r"[.,?!;:()\[\]{}\"/\\—–…«»„“”።፣፤፥፦፧፨،؛؟\-]+")
+# Remaining punctuation (e.g. intra-word apostrophes in ng'ombe) removed cleanly
+_PUNCT_TABLE = str.maketrans("", "", string.punctuation + "’‘")
+
+
+def clean_glued_punctuation(text: str) -> str:
+    """Insert a space after sentence punctuation when followed immediately by a word char.
+
+    Fixes human annotations like ``vizuri.ndio.eeeh`` -> ``vizuri. ndio. eeeh`` and
+    ``aina B?nisichopenda`` -> ``aina B? nisichopenda`` without stripping punctuation.
+    """
+    if not text:
+        return ""
+    out = re.sub(r"([.,?!;:])([^\W\d_])", r"\1 \2", str(text), flags=re.UNICODE)
+    return re.sub(r"\s+", " ", out).strip()
 
 
 def normalize_text(
@@ -38,6 +54,7 @@ def normalize_text(
     if cfg.lowercase:
         out = out.lower()
     if cfg.strip_punctuation:
+        out = _SPACE_PUNCT_RE.sub(" ", out)
         out = out.translate(_PUNCT_TABLE)
     if cfg.collapse_whitespace:
         out = re.sub(r"\s+", " ", out).strip()

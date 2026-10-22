@@ -165,6 +165,82 @@ def compute_ndizi_reward(
     return float(reward)
 
 
+class _SemanticEmbeddingScorer:
+    """Dense semantic similarity scorer (EmbeddingGemma / Multilingual-E5) for GRPO rewards."""
+
+    def __init__(
+        self,
+        model_id: str = "google/embeddinggemma-300m",
+        fallback_model_id: str = "intfloat/multilingual-e5-base",
+        device: Optional[torch.device] = None,
+        token: Optional[str] = None,
+    ) -> None:
+        from transformers import AutoModel, AutoTokenizer
+
+        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.dtype = torch.float16 if self.device.type == "cuda" else torch.float32
+        self.model = None
+        self.tokenizer = None
+        self.loaded_id = ""
+
+        kw: Dict[str, Any] = {"token": token} if token else {}
+        for candidate in (model_id, fallback_model_id):
+            if not candidate:
+                continue
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(candidate, **kw)
+                self.model = AutoModel.from_pretrained(
+                    candidate, torch_dtype=self.dtype, **kw
+                ).to(self.device)
+                self.model.eval()
+                for p in self.model.parameters():
+                    p.requires_grad = False
+                self.loaded_id = candidate
+                logger.info("Loaded semantic embedding reward model %s on %s", candidate, self.device)
+                break
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Could not load semantic model %s (%s); trying fallback", candidate, exc)
+
+    @property
+    def available(self) -> bool:
+        return self.model is not None and self.tokenizer is not None
+
+    @torch.inference_mode()
+    def score_candidates(self, ref: str, hyps: List[str]) -> np.ndarray:
+        """Return cosine similarities in [0.0, 1.0] between ``ref`` and each hypothesis."""
+        if not self.available or not hyps:
+            return np.zeros(len(hyps), dtype=np.float32)
+        ref_n = _norm_for_reward(ref)
+        hyps_n = [_norm_for_reward(h) for h in hyps]
+        if not ref_n:
+            return np.zeros(len(hyps), dtype=np.float32)
+
+        texts = [ref_n] + [h if h else " " for h in hyps_n]
+        if "e5" in self.loaded_id.lower():
+            texts = [f"passage: {t}" for t in texts]
+
+        enc = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=256,
+            return_tensors="pt",
+        ).to(self.device)
+        out = self.model(**enc)
+        hidden = out.last_hidden_state.float()  # (1+G, T, D)
+        mask = enc["attention_mask"].unsqueeze(-1).float()
+        pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-6)
+        normed = F.normalize(pooled, p=2, dim=-1)
+        ref_vec = normed[0:1]  # (1, D)
+        hyp_vecs = normed[1:]  # (G, D)
+        cos = (hyp_vecs * ref_vec).sum(dim=-1).clamp(min=0.0, max=1.0)
+        sims = cos.detach().cpu().numpy().astype(np.float32)
+        for i, h in enumerate(hyps_n):
+            if not h:
+                sims[i] = 0.0
+        return sims
+
+
 def _forced_prefix_ids(processor: WhisperProcessor, lang_code: str) -> List[int]:
     tok = processor.tokenizer
     lang_id = LANGUAGE_TOKENS_WHISPER.get(lang_code)
@@ -284,6 +360,13 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
     cer_weight = float(cfg.extra.get("cer_weight", 0.30))
     glossary_weight = float(cfg.extra.get("glossary_weight", 0.15))
     length_penalty_weight = float(cfg.extra.get("length_penalty_weight", 0.20))
+    semantic_reward_weight = float(cfg.extra.get("semantic_reward_weight", 0.20))
+    semantic_model_id = str(cfg.extra.get("semantic_model_id", "google/embeddinggemma-300m"))
+    semantic_fallback_id = str(cfg.extra.get("semantic_fallback_model_id", "intfloat/multilingual-e5-base"))
+    quality_gate = bool(cfg.extra.get("quality_gate", True))
+    min_learnable_wer = float(cfg.extra.get("min_learnable_wer", 0.04))
+    max_learnable_wer = float(cfg.extra.get("max_learnable_wer", 0.85))
+    max_corrupted_cer = float(cfg.extra.get("max_corrupted_cer", 0.45))
     max_new_tokens = int(cfg.extra.get("max_new_tokens", 200))
     max_train_samples = cfg.extra.get("max_train_samples")
     max_eval_samples = int(cfg.extra.get("max_eval_samples", 256))
@@ -368,6 +451,11 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
     pad_token_id = int(processor.tokenizer.pad_token_id or processor.tokenizer.eos_token_id or 50257)
     eos_token_id = int(processor.tokenizer.eos_token_id or 50257)
 
+    out_dir = Path(cfg.output_dir) / cfg.experiment_name
+    out_dir.mkdir(parents=True, exist_ok=True)
+    qc_dir = out_dir / "qc"
+    qc_dir.mkdir(parents=True, exist_ok=True)
+
     # Load dataset
     parts_tr = []
     for did in hub_ids:
@@ -378,11 +466,45 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
 
     audio_col = cfg.audio_column or _pick_col(list(raw_train.column_names), ["audio", "path"])
     text_col = cfg.text_column or _pick_col(list(raw_train.column_names), ["transcript", "text"])
+    chunk_long = bool(cfg.extra.get("chunk_long_audio", False))
+
+    if bool(cfg.extra.get("apply_data_qc", True)):
+        from ndizi_asr.data_qc import audit_and_filter_hf_split
+
+        min_cps = float(cfg.extra.get("min_chars_per_sec", 2.5))
+        max_cps = float(cfg.extra.get("max_chars_per_sec", 26.0))
+        raw_train, _ = audit_and_filter_hf_split(
+            raw_train,
+            split_name="train",
+            audio_col=audio_col,
+            text_col=text_col,
+            max_duration_s=max_input_s,
+            min_chars_per_sec=min_cps,
+            max_chars_per_sec=max_cps,
+            chunk_long_audio=chunk_long,
+            apply_filter=True,
+            repair_glued_punctuation=True,
+            report_dir=qc_dir,
+        )
+
+    if chunk_long:
+        from .long_audio_chunker import expand_long_audio_dataset
+
+        chunk_max_s = float(cfg.extra.get("chunk_max_seconds", 28.0))
+        raw_train = expand_long_audio_dataset(
+            raw_train,
+            audio_col=audio_col,
+            text_col=text_col,
+            max_chunk_seconds=chunk_max_s,
+            split_label="train",
+        )
+
+    from ndizi_asr.metrics import clean_glued_punctuation
 
     def _prepare_list(ds_split, cap: Optional[int] = None) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
-        for row in ds_split:
-            txt = str(row.get(text_col) or "").strip()
+        for row_idx, row in enumerate(ds_split):
+            txt = clean_glued_punctuation(str(row.get(text_col) or "").strip())
             if not txt:
                 continue
             audio = row[audio_col]
@@ -402,6 +524,7 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
             ref_seq = prefix_ids + clean_toks + [eos_token_id]
             items.append(
                 {
+                    "row_index": row_idx,
                     "input_features": feats,
                     "text": txt,
                     "ref_seq": ref_seq,
@@ -418,22 +541,45 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
         try:
             raw_eval = load_dataset(hub_ids[0], split=eval_split)
             raw_eval = raw_eval.cast_column(audio_col, Audio(sampling_rate=16000))
+            if bool(cfg.extra.get("apply_data_qc", True)):
+                from ndizi_asr.data_qc import audit_and_filter_hf_split
+
+                raw_eval, _ = audit_and_filter_hf_split(
+                    raw_eval,
+                    split_name="validation",
+                    audio_col=audio_col,
+                    text_col=text_col,
+                    max_duration_s=max_input_s,
+                    chunk_long_audio=False,
+                    apply_filter=False,
+                    repair_glued_punctuation=True,
+                    report_dir=qc_dir,
+                )
             eval_items = _prepare_list(raw_eval, cap=max_eval_samples)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not load eval_split %s: %s", eval_split, exc)
 
+    semantic_scorer: Optional[_SemanticEmbeddingScorer] = None
+    if semantic_reward_weight > 0.0:
+        semantic_scorer = _SemanticEmbeddingScorer(
+            model_id=semantic_model_id,
+            fallback_model_id=semantic_fallback_id,
+            device=device,
+            token=token,
+        )
+
     logger.info(
-        "GRPO ready: n_train=%d n_eval=%d G=%d temp=%.2f kl_beta=%.3f sft_anchor=%.2f",
+        "GRPO ready: n_train=%d n_eval=%d G=%d temp=%.2f kl_beta=%.3f sft_anchor=%.2f sem_w=%.2f (%s) qgate=%s",
         len(train_items),
         len(eval_items),
         group_size,
         temperature,
         kl_beta,
         sft_anchor_weight,
+        semantic_reward_weight if (semantic_scorer and semantic_scorer.available) else 0.0,
+        semantic_scorer.loaded_id if (semantic_scorer and semantic_scorer.available) else "off",
+        quality_gate,
     )
-
-    out_dir = Path(cfg.output_dir) / cfg.experiment_name
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     # Initial baseline validation before RL steps
     best_wer = math.inf
@@ -483,7 +629,11 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
 
     global_step = 0
     micro_step = 0
+    skipped_corrupted = 0
+    skipped_trivial = 0
+    runtime_corrupted_rows: List[Dict[str, Any]] = []
     running_reward = 0.0
+    running_sem = 0.0
     running_wer = 0.0
     running_loss = 0.0
     running_kl = 0.0
@@ -498,10 +648,10 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
         epoch_idx += 1
         indices = list(range(len(train_items)))
         random.shuffle(indices)
+        made_progress_in_epoch = False
 
         for idx in indices:
             item = train_items[idx]
-            micro_step += 1
 
             feats = torch.tensor(
                 item["input_features"], dtype=model_dtype, device=device
@@ -547,9 +697,28 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
             for i, s in enumerate(seq_list):
                 padded_seqs[i, : s.size(0)] = s
 
-            # 2) Decode texts & compute Ndizi task rewards
+            # 2) Decode texts & compute Ndizi lexical + semantic embedding rewards
             decoded_hyps = processor.batch_decode(padded_seqs, skip_special_tokens=True)
             ref_text = item["text"]
+            ref_norm = _norm_for_reward(ref_text) or "a"
+            greedy_norm = _norm_for_reward(decoded_hyps[0]) or ""
+            greedy_wer = float(jiwer_wer(ref_norm, greedy_norm))
+            greedy_cer = float(jiwer_cer(ref_norm, greedy_norm))
+
+            # Quality gate 1: skip swapped/corrupted/unintelligible audio-reference pairs
+            if quality_gate and greedy_wer > max_learnable_wer and greedy_cer > max_corrupted_cer:
+                skipped_corrupted += 1
+                runtime_corrupted_rows.append(
+                    {
+                        "row_index": item.get("row_index", idx),
+                        "greedy_wer": round(greedy_wer, 4),
+                        "greedy_cer": round(greedy_cer, 4),
+                        "reference_preview": ref_text[:120],
+                        "greedy_hyp_preview": decoded_hyps[0][:120],
+                    }
+                )
+                continue
+
             rewards = np.array(
                 [
                     compute_ndizi_reward(
@@ -564,17 +733,27 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
                 ],
                 dtype=np.float32,
             )
-            greedy_wer = float(
-                jiwer_wer(_norm_for_reward(ref_text) or "a", _norm_for_reward(decoded_hyps[0]) or "")
-            )
+            sem_mean = 0.0
+            if semantic_scorer is not None and semantic_scorer.available and semantic_reward_weight > 0.0:
+                sem_sims = semantic_scorer.score_candidates(ref_text, decoded_hyps)
+                rewards = rewards + float(semantic_reward_weight) * sem_sims
+                sem_mean = float(sem_sims.mean())
 
             r_mean = float(rewards.mean())
             r_std = float(rewards.std())
+
+            # Quality gate 2: skip trivial clips where all G rollouts are identical and already mastered
+            if quality_gate and r_std <= 1e-4 and greedy_wer < min_learnable_wer:
+                skipped_trivial += 1
+                continue
+
             if r_std > 1e-5:
                 advantages = (rewards - r_mean) / (r_std + 1e-6)
             else:
                 advantages = np.zeros_like(rewards)
 
+            micro_step += 1
+            made_progress_in_epoch = True
             adv_tensor = torch.tensor(advantages, dtype=torch.float32, device=device)
 
             # 3) Reference policy log-probs (zero extra memory via disable_adapter)
@@ -629,6 +808,7 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
             scaler.scale(loss_scaled).backward()
 
             running_reward += r_mean
+            running_sem += sem_mean
             running_wer += min(greedy_wer, 2.0)
             running_loss += float(total_loss.detach().cpu().item())
             running_kl += float(kl_loss.detach().cpu().item())
@@ -646,16 +826,21 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
                 if global_step % max(int(cfg.logging_steps), 1) == 0:
                     denom = max(log_count, 1)
                     logger.info(
-                        "GRPO step %d/%d | loss=%.4f | reward=%.4f | greedy_wer=%.4f | kl=%.4f | lr=%.2e",
+                        "GRPO step %d/%d | loss=%.4f | reward=%.4f | sem_cos=%.4f | greedy_wer=%.4f | kl=%.4f | "
+                        "skip_corrupt=%d | skip_triv=%d | lr=%.2e",
                         global_step,
                         total_opt_steps,
                         running_loss / denom,
                         running_reward / denom,
+                        running_sem / denom,
                         running_wer / denom,
                         running_kl / denom,
+                        skipped_corrupted,
+                        skipped_trivial,
                         scheduler.get_last_lr()[0],
                     )
                     running_reward = 0.0
+                    running_sem = 0.0
                     running_wer = 0.0
                     running_loss = 0.0
                     running_kl = 0.0
@@ -688,10 +873,26 @@ def train_whisper_grpo(cfg: "TrainConfig") -> Dict[str, Any]:
                 if global_step >= total_opt_steps:
                     break
 
+        if not made_progress_in_epoch:
+            logger.warning("No learnable clips remained in epoch %d; stopping GRPO early", epoch_idx)
+            break
+
+    if runtime_corrupted_rows:
+        import csv as _csv
+
+        corrupt_csv = qc_dir / "grpo_runtime_skipped_corrupted.csv"
+        with corrupt_csv.open("w", newline="", encoding="utf-8") as f:
+            writer = _csv.DictWriter(f, fieldnames=list(runtime_corrupted_rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(runtime_corrupted_rows)
+        logger.info("Wrote %d runtime-skipped corrupted GRPO rows to %s", len(runtime_corrupted_rows), corrupt_csv)
+
     # Final validation
     final_metrics: Dict[str, Any] = {
         "train_runtime": time.perf_counter() - started_at,
         "global_steps": global_step,
+        "skipped_corrupted": skipped_corrupted,
+        "skipped_trivial": skipped_trivial,
     }
     if eval_items:
         val_m = _evaluate_val(

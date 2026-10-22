@@ -65,6 +65,7 @@ ndizi-asr-glossary = "ndizi_asr.build_glossary:main"
 ndizi-asr-errors = "ndizi_asr.error_sheet:main"
 ndizi-asr-constrain = "ndizi_asr.constrain_fusion:main"
 ndizi-asr-hyp-cache = "ndizi_asr.save_hyp_cache:main"
+ndizi-asr-qc = "ndizi_asr.data_qc:main"
 # Back-compat
 gemini-asr-bench = "ndizi_asr.cli:main"
 

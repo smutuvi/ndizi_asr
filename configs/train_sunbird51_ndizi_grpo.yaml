@@ -1,15 +1,18 @@
-# Stage-2 GRPO (Group Relative Policy Optimization) on top of Stage-1 SunflowerASR-51 LoRA.
+# Stage-2 Quality-Gated + Semantic-Embedding GRPO on SunflowerASR-51.
 # Optimizes composite sequence-level reward:
-#   R = 1.0 - (0.70 * WER + 0.30 * CER) + 0.15 * GlossaryF1 - 0.20 * LengthHallucinationPenalty
-# with group size G=6, Schulman KL regularization (kl_beta=0.04) against the Stage-1 checkpoint,
-# and a lightweight teacher-forced SFT anchor (sft_anchor_weight=0.15).
+#   R = 1.0 - (0.70 * WER + 0.30 * CER) + 0.15 * GlossaryF1 + 0.20 * EmbeddingCosine - 0.20 * LengthPenalty
+# Features:
+#   - Automatic dataset QC (glued-punctuation repair + speech-rate outlier filtering + CSV/JSON audit reports)
+#   - Quality gating: skips corrupted/swapped references (greedy_wer > 0.85 & greedy_cer > 0.45) and trivial
+#     zero-variance clips so 100% of optimizer steps occur on learnable examples
+#   - Semantic embedding reward via google/embeddinggemma-300m (with intfloat/multilingual-e5-base fallback)
 #
 # Run:
 #   ndizi-asr-train --config configs/train_sunbird51_ndizi_grpo.yaml --dry-run
 #   ndizi-asr-train --config configs/train_sunbird51_ndizi_grpo.yaml
 
 dataset_id: smutuvi/ndizi-1-sw
-experiment_name: sunflower51_ndizi1sw_grpo
+experiment_name: sunflower51_ndizi1sw_grpo_qgate_sem
 backend: whisper_grpo
 model_id: outputs/sunflower51_ndizi1sw_lora/merged
 language: swahili
@@ -33,10 +36,14 @@ extra:
   stage: grpo
   dataset_ids:
     - smutuvi/ndizi-1-sw
+  apply_data_qc: true
+  chunk_long_audio: false
+  min_chars_per_sec: 2.5
+  max_chars_per_sec: 26.0
   max_input_seconds: 30
   label_max_length: 448
   group_size: 6
-  temperature: 0.75
+  temperature: 0.80
   top_p: 0.95
   kl_beta: 0.04
   sft_anchor_weight: 0.15
@@ -44,6 +51,13 @@ extra:
   cer_weight: 0.30
   glossary_weight: 0.15
   length_penalty_weight: 0.20
+  semantic_reward_weight: 0.20
+  semantic_model_id: google/embeddinggemma-300m
+  semantic_fallback_model_id: intfloat/multilingual-e5-base
+  quality_gate: true
+  min_learnable_wer: 0.04
+  max_learnable_wer: 0.85
+  max_corrupted_cer: 0.45
   max_new_tokens: 200
   max_eval_samples: 256
   eval_every_steps: 200

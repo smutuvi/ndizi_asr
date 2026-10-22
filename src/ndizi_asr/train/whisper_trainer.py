@@ -460,7 +460,45 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         except Exception as exc:
             logger.warning("Could not load eval split %s: %s", eval_split, exc)
 
-    if bool(cfg.extra.get("chunk_long_audio", False)):
+    out_dir = str(Path(cfg.output_dir) / cfg.experiment_name)
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    qc_dir = Path(out_dir) / "qc"
+    chunk_long = bool(cfg.extra.get("chunk_long_audio", False))
+
+    if bool(cfg.extra.get("apply_data_qc", True)):
+        from ndizi_asr.data_qc import audit_and_filter_hf_split
+
+        min_cps = float(cfg.extra.get("min_chars_per_sec", 2.5))
+        max_cps = float(cfg.extra.get("max_chars_per_sec", 26.0))
+        train_ds, _ = audit_and_filter_hf_split(
+            train_ds,
+            split_name="train",
+            audio_col=audio_col,
+            text_col=text_col,
+            max_duration_s=max_input_s,
+            min_chars_per_sec=min_cps,
+            max_chars_per_sec=max_cps,
+            chunk_long_audio=chunk_long,
+            apply_filter=True,
+            repair_glued_punctuation=True,
+            report_dir=qc_dir,
+        )
+        if eval_ds is not None:
+            eval_ds, _ = audit_and_filter_hf_split(
+                eval_ds,
+                split_name="validation",
+                audio_col=audio_col,
+                text_col=text_col,
+                max_duration_s=max_input_s,
+                min_chars_per_sec=min_cps,
+                max_chars_per_sec=max_cps,
+                chunk_long_audio=chunk_long and bool(cfg.extra.get("chunk_long_audio_eval", True)),
+                apply_filter=bool(cfg.extra.get("filter_eval_outliers", False)),
+                repair_glued_punctuation=True,
+                report_dir=qc_dir,
+            )
+
+    if chunk_long:
         from .long_audio_chunker import expand_long_audio_dataset
 
         chunk_max_s = float(cfg.extra.get("chunk_max_seconds", 28.0))
@@ -510,15 +548,18 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
             except Exception:  # noqa: BLE001
                 pass
 
+    from ndizi_asr.metrics import clean_glued_punctuation
+
     def prepare(batch: dict) -> dict:
         audio = batch[audio_col]
         arr = np.asarray(audio["array"], dtype=np.float32)
         sr = int(audio["sampling_rate"])
         dur = len(arr) / max(sr, 1)
-        batch["_drop"] = dur > max_input_s or not str(batch.get(text_col) or "").strip()
+        clean_txt = clean_glued_punctuation(str(batch.get(text_col) or ""))
+        batch["_drop"] = dur > max_input_s or not clean_txt
         batch["input_features"] = processor.feature_extractor(arr, sampling_rate=sr).input_features[0]
         batch["labels"] = processor.tokenizer(
-            str(batch[text_col]),
+            clean_txt,
             truncation=True,
             max_length=label_max,
         ).input_ids
