@@ -439,13 +439,50 @@ def rescore_predictions_file(
     if report_dir is not None:
         report_dir = Path(report_dir)
         report_dir.mkdir(parents=True, exist_ok=True)
-        out_csv = report_dir / f"test_outliers_{pred_path.parent.name}_{pred_path.stem}.csv"
+        tag = f"{pred_path.parent.parent.name}__{pred_path.parent.name}".strip("_")
+        out_csv = report_dir / f"test_outliers_{tag}.csv"
         if outlier_rows:
             with out_csv.open("w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=list(outlier_rows[0].keys()))
                 writer.writeheader()
                 writer.writerows(outlier_rows)
         res["outliers_csv"] = str(out_csv)
+
+        # Also export a standardized utterances.csv with fixed WER/CER per utterance
+        utt_csv = report_dir / f"utterances_fixed_{tag}.csv"
+        with utt_csv.open("w", newline="", encoding="utf-8") as f:
+            w_utt = csv.DictWriter(
+                f,
+                fieldnames=[
+                    "sample_id",
+                    "reference",
+                    "hypothesis",
+                    "wer_legacy",
+                    "wer_fixed",
+                    "cer_fixed",
+                ],
+            )
+            w_utt.writeheader()
+            for r, r_leg, h_leg, r_fix, h_fix in zip(
+                rows, refs_legacy, hyps_legacy, refs_fixed, hyps_fixed
+            ):
+                if not r_fix:
+                    continue
+                w_utt.writerow(
+                    {
+                        "sample_id": r.get("sample_id") or r.get("audio_file") or "",
+                        "reference": r.get("reference") or "",
+                        "hypothesis": (
+                            r.get("prediction")
+                            if r.get("prediction") is not None
+                            else (r.get("hypothesis") or r.get("fusion") or "")
+                        ),
+                        "wer_legacy": f"{process_words(r_leg, h_leg).wer:.4f}" if r_leg else "0.0000",
+                        "wer_fixed": f"{process_words(r_fix, h_fix).wer:.4f}",
+                        "cer_fixed": f"{jiwer_cer(r_fix, h_fix):.4f}",
+                    }
+                )
+        res["utterances_csv"] = str(utt_csv)
 
     return res
 
@@ -613,7 +650,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(hdr)
         print("-" * len(hdr))
         for r in rescored_list:
-            short_name = str(Path(r["file"]).parent.name + "/" + Path(r["file"]).name)[-52:]
+            fp = Path(r["file"])
+            parent = fp.parent.name
+            exp = fp.parent.parent.name if parent.startswith(("hf__", "outputs__", "sunbird")) else parent
+            short_name = f"{exp}/{fp.name}"[-52:]
             clean_str = f"{r['wer_clean_subset']:.4f} ({r['n_clean_after_outlier_filter']})"
             print(
                 f"{short_name:52} | {r['n_total']:4d} | {r['glued_punctuation_pct']:5.1f}% | "
