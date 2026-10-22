@@ -1,0 +1,60 @@
+# Stage-2 GRPO (Group Relative Policy Optimization) on top of Stage-1 SunflowerASR-51 LoRA.
+# Optimizes composite sequence-level reward:
+#   R = 1.0 - (0.70 * WER + 0.30 * CER) + 0.15 * GlossaryF1 - 0.20 * LengthHallucinationPenalty
+# with group size G=6, Schulman KL regularization (kl_beta=0.04) against the Stage-1 checkpoint,
+# and a lightweight teacher-forced SFT anchor (sft_anchor_weight=0.15).
+#
+# Run:
+#   ndizi-asr-train --config configs/train_sunbird51_ndizi_grpo.yaml --dry-run
+#   ndizi-asr-train --config configs/train_sunbird51_ndizi_grpo.yaml
+
+dataset_id: smutuvi/ndizi-1-sw
+experiment_name: sunflower51_ndizi1sw_grpo
+backend: whisper_grpo
+model_id: outputs/sunflower51_ndizi1sw_lora/merged
+language: swahili
+audio_column: audio
+text_column: transcript
+split: train
+eval_split: validation
+output_dir: outputs
+num_train_epochs: 1.0
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 4
+learning_rate: 1.5e-5
+warmup_ratio: 0.05
+fp16: true
+logging_steps: 20
+save_steps: 200
+max_steps: 600
+lora: true
+
+extra:
+  stage: grpo
+  dataset_ids:
+    - smutuvi/ndizi-1-sw
+  max_input_seconds: 30
+  label_max_length: 448
+  group_size: 6
+  temperature: 0.75
+  top_p: 0.95
+  kl_beta: 0.04
+  sft_anchor_weight: 0.15
+  wer_weight: 0.70
+  cer_weight: 0.30
+  glossary_weight: 0.15
+  length_penalty_weight: 0.20
+  max_new_tokens: 200
+  max_eval_samples: 256
+  eval_every_steps: 200
+  save_merged: true
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  lora_target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - out_proj
+    - fc1
+    - fc2

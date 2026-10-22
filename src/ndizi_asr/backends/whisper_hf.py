@@ -111,10 +111,32 @@ def _resample_linear(array: np.ndarray, orig_sr: int, target_sr: int) -> np.ndar
     return np.interp(x_new, x_old, arr).astype(np.float32)
 
 
+def _is_local_finetune(model_id: str) -> bool:
+    from pathlib import Path
+
+    p = Path(model_id).expanduser()
+    if p.is_dir():
+        return True
+    mid = model_id.lower()
+    return "ndizi-whisper" in mid or "lora" in mid or "merged" in mid
+
+
 def _chunk_audio(array: np.ndarray, sampling_rate: int, max_seconds: float = MAX_SECONDS) -> list[np.ndarray]:
     max_samples = int(max_seconds * sampling_rate)
     if len(array) <= max_samples:
         return [array]
+    try:
+        from ..audio import chunk_waveform_by_vad
+
+        vad_chunks = chunk_waveform_by_vad(
+            np.asarray(array, dtype=np.float32),
+            max_chunk_s=min(max_seconds, 28.0),
+            sampling_rate=sampling_rate,
+        )
+        if vad_chunks:
+            return vad_chunks
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("VAD chunking unavailable (%s); falling back to fixed windows", exc)
     chunks = []
     for start in range(0, len(array), max_samples):
         chunk = array[start : start + max_samples]
@@ -222,6 +244,12 @@ class HuggingFaceWhisperClient:
 
         self.model.eval()
         self._sunbird = _is_sunbird_whisper(model_id)
+        self._local_ft = _is_local_finetune(model_id)
+        if hasattr(self.model, "generation_config") and self.model.generation_config is not None:
+            # Clear language/task on generation_config so explicit forced_decoder_ids
+            # in .generate() does not double-prepend prefix tokens in transformers 5.x.
+            self.model.generation_config.language = None
+            self.model.generation_config.task = None
         self._transcribe_tok = self.processor.tokenizer.convert_tokens_to_ids("<|transcribe|>")
         self._notimestamps_tok = self.processor.tokenizer.convert_tokens_to_ids("<|notimestamps|>")
 
@@ -281,10 +309,17 @@ class HuggingFaceWhisperClient:
 
     def _transcribe_chunk(self, audio: np.ndarray, forced_decoder_ids: list[tuple[int, int]]) -> str:
         torch = self.torch
+        # Match whisper_trainer.py feature extraction (do_normalize=False by default)
+        # on local/Ndizi fine-tunes; keep do_normalize=True for zero-shot Sunbird hub models.
+        do_norm = (
+            bool(getattr(self.processor.feature_extractor, "do_normalize", False))
+            if self._local_ft
+            else True
+        )
         inputs = self.processor(
             audio,
             sampling_rate=SAMPLE_RATE,
-            do_normalize=True,
+            do_normalize=do_norm,
             return_tensors="pt",
         )
         input_features = inputs.input_features.to(self.device, dtype=self.model.dtype)
@@ -292,6 +327,7 @@ class HuggingFaceWhisperClient:
             predicted_ids = self.model.generate(
                 input_features,
                 forced_decoder_ids=forced_decoder_ids,
+                max_new_tokens=256,
                 num_beams=self.num_beams,
                 do_sample=False,
             )

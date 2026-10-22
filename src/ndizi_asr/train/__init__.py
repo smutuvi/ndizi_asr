@@ -90,8 +90,8 @@ def run_train(cfg: TrainConfig, *, dry_run: bool = False) -> dict[str, Any]:
             "Provide dataset_id, extra.dataset_ids / extra.train_datasets (HF Hub), "
             "or csv_path for training data"
         )
-    if cfg.backend not in {"whisper", "ctc"}:
-        raise ValueError(f"Unsupported train backend {cfg.backend!r}; use whisper|ctc")
+    if cfg.backend not in {"whisper", "whisper_grpo", "grpo", "ctc"}:
+        raise ValueError(f"Unsupported train backend {cfg.backend!r}; use whisper|whisper_grpo|ctc")
 
     out = Path(cfg.output_dir) / cfg.experiment_name
     out.mkdir(parents=True, exist_ok=True)
@@ -106,6 +106,10 @@ def run_train(cfg: TrainConfig, *, dry_run: bool = False) -> dict[str, Any]:
 
     # Deferred import so eval-only installs stay light.
     try:
+        if cfg.backend in {"whisper_grpo", "grpo"} or str(cfg.extra.get("stage", "")).lower() == "grpo":
+            from .whisper_grpo import train_whisper_grpo
+
+            return train_whisper_grpo(cfg)
         if cfg.backend == "whisper":
             from .whisper_trainer import train_whisper
 
