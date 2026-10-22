@@ -1,0 +1,57 @@
+# Move B: SunflowerASR-51 trained on 100% of smutuvi/ndizi-1-sw audio (word-aligned
+# MMS_FA / Silero-VAD chunking of the 1,544 clips >30s into <=28s segments) +
+# full unfreezing of the top 8 acoustic encoder layers (lr=1.5e-5) + rank-32 LoRA
+# across all 32 decoder layers (lr=4.0e-5).
+#
+# Run:
+#   ndizi-asr-train --config configs/train_sunbird51_ndizi_fullaudio_enc_lora.yaml --dry-run
+#   ndizi-asr-train --config configs/train_sunbird51_ndizi_fullaudio_enc_lora.yaml
+
+dataset_id: smutuvi/ndizi-1-sw
+experiment_name: sunflower51_ndizi1sw_fullaudio_enc8
+backend: whisper
+model_id: Sunbird/SunflowerASR-51-african-languages
+language: swahili
+audio_column: audio
+text_column: transcript
+split: train
+eval_split: validation
+output_dir: outputs
+num_train_epochs: 5
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 4
+learning_rate: 4.0e-5
+warmup_ratio: 0.08
+fp16: true
+logging_steps: 25
+save_steps: 500
+lora: true
+
+extra:
+  dataset_ids:
+    - smutuvi/ndizi-1-sw
+  chunk_long_audio: true
+  chunk_long_audio_eval: true
+  chunk_max_seconds: 28.0
+  max_input_seconds: 30.0
+  label_max_length: 448
+  freeze_encoder: true
+  unfreeze_top_encoder_layers: 8
+  encoder_learning_rate: 1.5e-5
+  label_smoothing_factor: 0.0
+  lr_scheduler_type: cosine
+  save_merged: true
+  lora_r: 32
+  lora_alpha: 64
+  lora_dropout: 0.05
+  lora_target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - out_proj
+    - fc1
+    - fc2
+  gradient_checkpointing: true
+  save_total_limit: 2
+  per_device_eval_batch_size: 4
+  dataloader_num_workers: 2

@@ -287,6 +287,71 @@ class _WhisperSeq2SeqTrainer(Seq2SeqTrainer):
         finally:
             model.generate = base_generate  # type: ignore[method-assign]
 
+    def create_optimizer(self):
+        """Support differential learning rate for Whisper encoder vs. decoder parameters."""
+        enc_lr = getattr(self, "_encoder_learning_rate", None)
+        if enc_lr is None or self.optimizer is not None:
+            return super().create_optimizer()
+
+        decay_parameters = self.get_decay_parameter_names(self.model)
+        enc_decay, enc_nodecay = [], []
+        dec_decay, dec_nodecay = [], []
+        for name, param in self.model.named_parameters():
+            if not param.requires_grad:
+                continue
+            is_enc = ".encoder." in name or name.startswith("encoder.")
+            in_decay = name in decay_parameters
+            if is_enc and in_decay:
+                enc_decay.append(param)
+            elif is_enc:
+                enc_nodecay.append(param)
+            elif in_decay:
+                dec_decay.append(param)
+            else:
+                dec_nodecay.append(param)
+
+        wd = float(self.args.weight_decay)
+        dec_lr = float(self.args.learning_rate)
+        enc_lr_f = float(enc_lr)
+        optimizer_grouped_parameters = [
+            {"params": dec_decay, "weight_decay": wd, "lr": dec_lr},
+            {"params": dec_nodecay, "weight_decay": 0.0, "lr": dec_lr},
+            {"params": enc_decay, "weight_decay": wd, "lr": enc_lr_f},
+            {"params": enc_nodecay, "weight_decay": 0.0, "lr": enc_lr_f},
+        ]
+        optimizer_grouped_parameters = [g for g in optimizer_grouped_parameters if g["params"]]
+        optimizer_cls, optimizer_kwargs = self.get_optimizer_cls_and_kwargs(self.args, self.model)
+        self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
+        logger.info(
+            "Configured differential optimizer: decoder_lr=%.2e (%d tensors) | encoder_lr=%.2e (%d tensors)",
+            dec_lr,
+            len(dec_decay) + len(dec_nodecay),
+            enc_lr_f,
+            len(enc_decay) + len(enc_nodecay),
+        )
+        return self.optimizer
+
+    def _save(self, output_dir: Optional[str] = None, state_dict=None):
+        super()._save(output_dir=output_dir, state_dict=state_dict)
+        target_dir = Path(output_dir or self.args.output_dir)
+        non_lora = {
+            n: p.detach().cpu()
+            for n, p in self.model.named_parameters()
+            if p.requires_grad and "lora_" not in n
+        }
+        if non_lora:
+            torch.save(non_lora, target_dir / "unfrozen_base_params.pt")
+
+    def _load_best_model(self):
+        super()._load_best_model()
+        best_ckpt = getattr(self.state, "best_model_checkpoint", None)
+        if best_ckpt:
+            extra_pt = Path(best_ckpt) / "unfrozen_base_params.pt"
+            if extra_pt.is_file():
+                logger.info("Restoring unfrozen base/encoder parameters from %s", extra_pt)
+                state = torch.load(extra_pt, map_location="cpu")
+                self.model.load_state_dict(state, strict=False)
+
     def _maybe_log_save_evaluate(self, *args, **kwargs):
         # Save before eval so a generate() crash does not lose the finished epoch.
         if getattr(self.control, "should_evaluate", False) and getattr(self.control, "should_save", False):
@@ -303,6 +368,9 @@ def _apply_lora(model: WhisperForConditionalGeneration, cfg: "TrainConfig"):
     r = int(cfg.extra.get("lora_r", 16))
     alpha = int(cfg.extra.get("lora_alpha", 32))
     dropout = float(cfg.extra.get("lora_dropout", 0.05))
+    unfreeze_top_k = int(cfg.extra.get("unfreeze_top_encoder_layers", 0))
+    freeze_enc = bool(cfg.extra.get("freeze_encoder", False))
+
     target = cfg.extra.get("lora_target_modules") or [
         "q_proj",
         "k_proj",
@@ -311,15 +379,48 @@ def _apply_lora(model: WhisperForConditionalGeneration, cfg: "TrainConfig"):
         "fc1",
         "fc2",
     ]
+    # When unfreezing top-K encoder layers in full-rank mode (or strictly decoder-only LoRA),
+    # restrict LoRA wrapping to decoder projections so encoder layers don't get dual-wrapped.
+    if unfreeze_top_k > 0 or (freeze_enc and bool(cfg.extra.get("decoder_only_lora", False))):
+        proj_pat = "|".join(str(x) for x in target)
+        target_spec: Any = rf".*decoder\.layers\.\d+\..*({proj_pat})"
+    else:
+        target_spec = list(target)
+
     lora_cfg = LoraConfig(
         r=r,
         lora_alpha=alpha,
         lora_dropout=dropout,
-        target_modules=list(target),
+        target_modules=target_spec,
         bias="none",
     )
-    logger.info("Applying LoRA r=%s alpha=%s targets=%s", r, alpha, target)
+    logger.info("Applying LoRA r=%s alpha=%s targets=%s", r, alpha, target_spec)
     model = get_peft_model(model, lora_cfg)
+
+    if unfreeze_top_k > 0:
+        base = model.get_base_model() if hasattr(model, "get_base_model") else model
+        enc = getattr(getattr(base, "model", base), "encoder", None)
+        dec = getattr(getattr(base, "model", base), "decoder", None)
+        if enc is not None and hasattr(enc, "layers"):
+            n_enc = len(enc.layers)
+            k = min(unfreeze_top_k, n_enc)
+            for layer in enc.layers[n_enc - k :]:
+                for p in layer.parameters():
+                    p.requires_grad = True
+            if hasattr(enc, "layer_norm"):
+                for p in enc.layer_norm.parameters():
+                    p.requires_grad = True
+            logger.info(
+                "Unfroze top %d/%d Whisper encoder layers (layers %d..%d) + encoder.layer_norm",
+                k,
+                n_enc,
+                n_enc - k,
+                n_enc - 1,
+            )
+        if dec is not None and hasattr(dec, "layer_norm"):
+            for p in dec.layer_norm.parameters():
+                p.requires_grad = True
+
     model.print_trainable_parameters()
     return model
 
@@ -359,46 +460,55 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         except Exception as exc:
             logger.warning("Could not load eval split %s: %s", eval_split, exc)
 
+    if bool(cfg.extra.get("chunk_long_audio", False)):
+        from .long_audio_chunker import expand_long_audio_dataset
+
+        chunk_max_s = float(cfg.extra.get("chunk_max_seconds", 28.0))
+        train_ds = expand_long_audio_dataset(
+            train_ds,
+            audio_col=audio_col,
+            text_col=text_col,
+            max_chunk_seconds=chunk_max_s,
+            split_label="train",
+        )
+        if eval_ds is not None and bool(cfg.extra.get("chunk_long_audio_eval", True)):
+            eval_ds = expand_long_audio_dataset(
+                eval_ds,
+                audio_col=audio_col,
+                text_col=text_col,
+                max_chunk_seconds=chunk_max_s,
+                split_label="validation",
+            )
+
     token = _hf_token()
     load_kw: Dict[str, Any] = {}
     if token:
         load_kw["token"] = token
     try:
         processor = WhisperProcessor.from_pretrained(cfg.model_id, **load_kw)
-        model = WhisperForConditionalGeneration.from_pretrained(cfg.model_id, **load_kw)
     except Exception as exc:
         msg = str(exc).lower()
         if "gated" in msg or "401" in msg or "restricted" in msg or "unauthorized" in msg:
             raise _gated_access_error(cfg.model_id, exc) from exc
         raise
-    if hasattr(model, "generation_config") and model.generation_config is not None:
-        model.generation_config.forced_decoder_ids = None
-    _set_language_forcing(model, processor, lang_code)
 
-    if bool(cfg.extra.get("freeze_encoder", False)) and hasattr(model, "freeze_encoder"):
-        logger.info("Freezing Whisper acoustic encoder (decoder-only adaptation)")
-        model.freeze_encoder()
-
-    if cfg.lora:
-        model = _apply_lora(model, cfg)
-    # Re-assert after PEFT wrap (some peft/transformers versions restore forced ids).
-    model.config.forced_decoder_ids = None
-    if hasattr(model, "config"):
-        model.config.suppress_tokens = []
-    if cfg.extra.get("gradient_checkpointing", True):
-        model.config.use_cache = False
-        if hasattr(model, "enable_input_require_grads"):
-            model.enable_input_require_grads()
-        model.gradient_checkpointing_enable()
-    # PEFT + Trainer can inject decoder_inputs_embeds alongside decoder_input_ids (HF #39542).
-    model = _guard_whisper_decoder_kwargs(model)
-    # Re-apply generate language after PEFT wrap (eval uses model.generate).
-    _set_language_forcing(
-        model.get_base_model() if hasattr(model, "get_base_model") else model,
-        processor,
-        lang_code,
-    )
-    model.config.forced_decoder_ids = None
+    # Configure tokenizer prefix tokens before feature/label mapping
+    whisper_lang_name = _WHISPER_GENERATE_LANG_NAME.get(lang_code)
+    lang_id = LANGUAGE_TOKENS_WHISPER.get(lang_code)
+    if lang_id is not None:
+        transcribe_id = processor.tokenizer.convert_tokens_to_ids("<|transcribe|>")
+        notimestamps_id = processor.tokenizer.convert_tokens_to_ids("<|notimestamps|>")
+        try:
+            processor.tokenizer.set_prefix_tokens(
+                language=whisper_lang_name or lang_code,
+                task="transcribe",
+                predict_timestamps=False,
+            )
+        except Exception:  # noqa: BLE001
+            try:
+                processor.tokenizer.prefix_tokens = [lang_id, transcribe_id, notimestamps_id]
+            except Exception:  # noqa: BLE001
+                pass
 
     def prepare(batch: dict) -> dict:
         audio = batch[audio_col]
@@ -427,6 +537,42 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
             .filter(lambda x: not x["_drop"])
             .remove_columns(["_drop"])
         )
+
+    try:
+        model = WhisperForConditionalGeneration.from_pretrained(cfg.model_id, **load_kw)
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "gated" in msg or "401" in msg or "restricted" in msg or "unauthorized" in msg:
+            raise _gated_access_error(cfg.model_id, exc) from exc
+        raise
+    if hasattr(model, "generation_config") and model.generation_config is not None:
+        model.generation_config.forced_decoder_ids = None
+    _set_language_forcing(model, processor, lang_code)
+
+    if bool(cfg.extra.get("freeze_encoder", False)) and hasattr(model, "freeze_encoder"):
+        logger.info("Freezing Whisper acoustic encoder (before selective unfreeze / LoRA)")
+        model.freeze_encoder()
+
+    if cfg.lora:
+        model = _apply_lora(model, cfg)
+    # Re-assert after PEFT wrap (some peft/transformers versions restore forced ids).
+    model.config.forced_decoder_ids = None
+    if hasattr(model, "config"):
+        model.config.suppress_tokens = []
+    if cfg.extra.get("gradient_checkpointing", True):
+        model.config.use_cache = False
+        if hasattr(model, "enable_input_require_grads"):
+            model.enable_input_require_grads()
+        model.gradient_checkpointing_enable()
+    # PEFT + Trainer can inject decoder_inputs_embeds alongside decoder_input_ids (HF #39542).
+    model = _guard_whisper_decoder_kwargs(model)
+    # Re-apply generate language after PEFT wrap (eval uses model.generate).
+    _set_language_forcing(
+        model.get_base_model() if hasattr(model, "get_base_model") else model,
+        processor,
+        lang_code,
+    )
+    model.config.forced_decoder_ids = None
 
     out_dir = str(Path(cfg.output_dir) / cfg.experiment_name)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -496,6 +642,7 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         trainer = _WhisperSeq2SeqTrainer(**trainer_kwargs, processing_class=processor)
     except TypeError:
         trainer = _WhisperSeq2SeqTrainer(**trainer_kwargs, tokenizer=processor)
+    trainer._encoder_learning_rate = cfg.extra.get("encoder_learning_rate")  # type: ignore[attr-defined]
 
     logger.info(
         "Starting train: n_train=%s n_eval=%s lora=%s model=%s",
