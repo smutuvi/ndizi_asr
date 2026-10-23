@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -789,7 +791,16 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
 
     use_bf16 = bool(cfg.extra.get("bf16", False))
     use_fp16 = bool(cfg.fp16) and not use_bf16 and torch.cuda.is_available()
-    args = Seq2SeqTrainingArguments(
+
+    eff_batch = max(1, int(cfg.per_device_train_batch_size) * int(cfg.gradient_accumulation_steps))
+    steps_per_epoch = max(1, math.ceil(len(train_ds) / eff_batch))
+    total_train_steps = (
+        int(cfg.max_steps)
+        if cfg.max_steps is not None and int(cfg.max_steps) > 0
+        else max(1, int(math.ceil(steps_per_epoch * float(cfg.num_train_epochs))))
+    )
+
+    arg_kw: Dict[str, Any] = dict(
         output_dir=out_dir,
         per_device_train_batch_size=cfg.per_device_train_batch_size,
         per_device_eval_batch_size=int(
@@ -820,6 +831,22 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         save_total_limit=int(cfg.extra.get("save_total_limit", 2)),
         dataloader_num_workers=int(cfg.extra.get("dataloader_num_workers", 0)),
     )
+    sig_params = inspect.signature(Seq2SeqTrainingArguments.__init__).parameters
+    if "warmup_ratio" in arg_kw and "warmup_ratio" not in sig_params:
+        ratio = float(arg_kw.pop("warmup_ratio") or 0.0)
+        if ratio > 0.0 and "warmup_steps" in sig_params:
+            arg_kw["warmup_steps"] = max(1, int(round(ratio * total_train_steps)))
+            logger.info(
+                "Converted warmup_ratio=%.3f -> warmup_steps=%d (total_train_steps=%d) for transformers 5.x",
+                ratio,
+                arg_kw["warmup_steps"],
+                total_train_steps,
+            )
+    if "eval_strategy" in arg_kw and "eval_strategy" not in sig_params and "evaluation_strategy" in sig_params:
+        arg_kw["evaluation_strategy"] = arg_kw.pop("eval_strategy")
+    for k in [k for k in list(arg_kw) if k not in sig_params and k != "self"]:
+        logger.warning("Seq2SeqTrainingArguments: dropping unsupported kwarg %s=%r", k, arg_kw.pop(k))
+    args = Seq2SeqTrainingArguments(**arg_kw)
 
     trainer_kwargs: Dict[str, Any] = dict(
         args=args,
