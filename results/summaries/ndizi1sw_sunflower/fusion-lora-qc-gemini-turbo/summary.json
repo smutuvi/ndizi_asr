@@ -1,0 +1,53 @@
+{
+  "created_at": "20261023T103719Z",
+  "editor": "google/gemini-2.5-flash",
+  "few_shot": 8,
+  "few_shot_retrieve": true,
+  "use_audio": false,
+  "thinking": false,
+  "thinking_effort": null,
+  "seed": 42,
+  "num_eval": 1028,
+  "systems": {
+    "hf:outputs/sunflower51_ndizi1sw_lora_qc/merged": {
+      "num_samples": 1028,
+      "num_scored": 1028,
+      "num_errors": 0,
+      "wer": 0.36467312999096435,
+      "cer": 0.1039491651554451,
+      "wer_normalized": 0.17963704925760077,
+      "cer_normalized": 0.06947445277227281,
+      "mean_latency_seconds": null
+    },
+    "google/gemini-2.5-flash": {
+      "num_samples": 1028,
+      "num_scored": 1028,
+      "num_errors": 0,
+      "wer": 0.45324672153166135,
+      "cer": 0.1405436062683785,
+      "wer_normalized": 0.21425877916568467,
+      "cer_normalized": 0.09205644380205928,
+      "mean_latency_seconds": null
+    },
+    "smutuvi/ndizi-whisper-large-v3-turbo-optimized": {
+      "num_samples": 1028,
+      "num_scored": 1028,
+      "num_errors": 0,
+      "wer": 0.4004981806637525,
+      "cer": 0.13252389656741975,
+      "wer_normalized": 0.24838557624322413,
+      "cer_normalized": 0.1013470220977187,
+      "mean_latency_seconds": null
+    },
+    "fusion:google/gemini-2.5-flash+fs8+ret": {
+      "num_samples": 1028,
+      "num_scored": 1025,
+      "num_errors": 3,
+      "wer": 0.33761946989851216,
+      "cer": 0.10669024354674056,
+      "wer_normalized": 0.15840053283855468,
+      "cer_normalized": 0.07099432661977073,
+      "mean_latency_seconds": 1.4159550779112955
+    }
+  }
+}
