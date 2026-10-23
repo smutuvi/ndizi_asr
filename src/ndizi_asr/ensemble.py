@@ -870,7 +870,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--data-root", default=None)
     p.add_argument("--languages", "--language-filter", nargs="+", dest="language_filter", default=None)
     p.add_argument("--max-samples", type=int, default=None)
-    p.add_argument("--normalize", choices=["default", "ethio", "none"], default="ethio")
+    p.add_argument("--normalize", choices=["default", "ethio", "oromo_platform", "oromo_fair", "swahili_fair", "swahili_canon", "none"], default="default")
     p.add_argument("--glossary", type=Path, default=None, help="Optional text glossary for the editor")
     p.add_argument(
         "--few-shot",
