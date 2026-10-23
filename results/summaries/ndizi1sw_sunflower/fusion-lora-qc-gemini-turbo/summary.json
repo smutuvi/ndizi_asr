@@ -15,9 +15,11 @@
       "num_errors": 0,
       "wer": 0.36467312999096435,
       "cer": 0.1039491651554451,
-      "wer_normalized": 0.17963704925760077,
-      "cer_normalized": 0.06947445277227281,
-      "mean_latency_seconds": null
+      "wer_normalized": 0.17531946998632528,
+      "cer_normalized": 0.06883316751068531,
+      "mean_latency_seconds": null,
+      "wer_fixed_punct": 0.23788998357963875,
+      "cer_fixed_punct": 0.08239539291441901
     },
     "google/gemini-2.5-flash": {
       "num_samples": 1028,
@@ -25,9 +27,11 @@
       "num_errors": 0,
       "wer": 0.45324672153166135,
       "cer": 0.1405436062683785,
-      "wer_normalized": 0.21425877916568467,
-      "cer_normalized": 0.09205644380205928,
-      "mean_latency_seconds": null
+      "wer_normalized": 0.20924694676286132,
+      "cer_normalized": 0.09141858480617382,
+      "mean_latency_seconds": null,
+      "wer_fixed_punct": 0.27768655354862254,
+      "cer_fixed_punct": 0.10754847645429363
     },
     "smutuvi/ndizi-whisper-large-v3-turbo-optimized": {
       "num_samples": 1028,
@@ -35,19 +39,23 @@
       "num_errors": 0,
       "wer": 0.4004981806637525,
       "cer": 0.13252389656741975,
-      "wer_normalized": 0.24838557624322413,
-      "cer_normalized": 0.1013470220977187,
-      "mean_latency_seconds": null
+      "wer_normalized": 0.24376385155844768,
+      "cer_normalized": 0.10071210579857579,
+      "mean_latency_seconds": null,
+      "wer_fixed_punct": 0.32122331691297207,
+      "cer_fixed_punct": 0.11595713660883511
     },
     "fusion:google/gemini-2.5-flash+fs8+ret": {
       "num_samples": 1028,
-      "num_scored": 1025,
-      "num_errors": 3,
-      "wer": 0.33761946989851216,
-      "cer": 0.10669024354674056,
-      "wer_normalized": 0.15840053283855468,
-      "cer_normalized": 0.07099432661977073,
-      "mean_latency_seconds": 1.4159550779112955
+      "num_scored": 1028,
+      "num_errors": 0,
+      "wer": 0.3382255976946934,
+      "cer": 0.10671271376861331,
+      "wer_normalized": 0.15351063328146367,
+      "cer_normalized": 0.07022682302438152,
+      "mean_latency_seconds": 1.41468128200316,
+      "wer_fixed_punct": 0.21820835613939063,
+      "cer_fixed_punct": 0.08614229479515964
     }
   }
 }
