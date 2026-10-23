@@ -1,7 +1,8 @@
-system,n_total,wer_legacy_glued,wer_fixed_punct,cer_fixed_punct,wer_clean_subset,cer_clean_subset,n_clean,wer_swahili_fair,cer_swahili_fair,wer_swahili_fair_clean,cer_swahili_fair_clean
-ndizi-whisper-turbo,1036,0.3594,0.3212,0.1159,0.3117,0.1071,1027,0.2434,0.1005,0.2336,0.0916
-gemini-2.5-flash,1036,0.362,0.2778,0.1076,0.2597,0.0937,1027,0.2091,0.0912,0.19,0.0771
-sunflower51-lora,1036,0.2883,0.2576,0.0891,0.2495,0.0823,1029,0.1914,0.0745,0.183,0.0678
-sunflower51-grpo,1036,0.2867,0.2571,0.0887,0.2505,0.0829,1030,0.1898,0.0737,0.1831,0.068
-sunflower51-lora-qc,1036,0.3328,0.2379,0.0824,0.2297,0.0752,1028,0.1752,0.0687,0.1668,0.0617
-fusion-lora-qc-gemini-turbo,1028,0.2954,0.2182,0.0861,0.2106,0.0787,1021,0.1535,0.0702,0.1454,0.0628
+system,n_total,wer_legacy_glued,wer_fixed_punct,cer_fixed_punct,wer_clean_subset,n_clean,wer_swahili_fair,cer_swahili_fair,wer_swahili_fair_clean,cer_swahili_fair_clean
+ndizi-whisper-turbo,1036,0.3594,0.3212,0.1159,0.3117,1027,0.2434,0.1005,0.2336,0.0916
+gemini-2.5-flash,1036,0.362,0.2778,0.1076,0.2597,1027,0.2091,0.0912,0.19,0.0771
+sunflower51-lora,1036,0.2883,0.2576,0.0891,0.2495,1029,0.1914,0.0745,0.183,0.0678
+sunflower51-grpo,1036,0.2867,0.2571,0.0887,0.2505,1030,0.1898,0.0737,0.1831,0.068
+sunflower51-lora-qc,1036,0.3328,0.2379,0.0824,0.2297,1028,0.1752,0.0687,0.1668,0.0617
+sunflower51-lora-qc-gemma-mbr,1036,0.336,0.2438,0.0827,0.2372,1030,0.1706,0.0667,0.1638,0.061
+fusion-lora-qc-gemini-turbo,1028,0.2954,0.2182,0.0861,0.2106,1021,0.1535,0.0702,0.1454,0.0628
