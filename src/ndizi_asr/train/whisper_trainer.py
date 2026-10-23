@@ -387,14 +387,33 @@ def _apply_lora(model: WhisperForConditionalGeneration, cfg: "TrainConfig"):
     else:
         target_spec = list(target)
 
-    lora_cfg = LoraConfig(
+    use_rslora = bool(cfg.extra.get("use_rslora", False))
+    use_dora = bool(cfg.extra.get("use_dora", False))
+    lora_kwargs: Dict[str, Any] = dict(
         r=r,
         lora_alpha=alpha,
         lora_dropout=dropout,
         target_modules=target_spec,
         bias="none",
     )
-    logger.info("Applying LoRA r=%s alpha=%s targets=%s", r, alpha, target_spec)
+    if use_rslora:
+        lora_kwargs["use_rslora"] = True
+    if use_dora:
+        lora_kwargs["use_dora"] = True
+    try:
+        lora_cfg = LoraConfig(**lora_kwargs)
+    except TypeError:
+        lora_kwargs.pop("use_rslora", None)
+        lora_kwargs.pop("use_dora", None)
+        lora_cfg = LoraConfig(**lora_kwargs)
+    logger.info(
+        "Applying LoRA r=%s alpha=%s rslora=%s dora=%s targets=%s",
+        r,
+        alpha,
+        use_rslora,
+        use_dora,
+        target_spec,
+    )
     model = get_peft_model(model, lora_cfg)
 
     if unfreeze_top_k > 0:

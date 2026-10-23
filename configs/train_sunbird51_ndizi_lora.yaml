@@ -1,9 +1,10 @@
 # Stage-1 SunflowerASR-51 LoRA on smutuvi/ndizi-1-sw — deploy baseline.
-# Combines all single-model quality & acoustic improvements:
+# Preserves 100% of SunflowerASR-51's 51-language base weights while maximizing
+# in-domain Swahili farmer-survey accuracy:
 #   1. Dataset QC: glued-punctuation repair + speech-rate / tiny-transcript filtering
 #   2. Canonicalized Swahili training targets (compounds, Bantu R/L & H-drop, mojibake)
 #   3. Long audio: MMS_FA / Silero-VAD chunking of 1,550 clips >30s into <=28s segments
-#   4. Top-8 encoder unfreeze (lr=1.5e-5) + SpecAugment + rank-32 decoder LoRA (lr=4.0e-5)
+#   4. 100% frozen base model + rsLoRA across Encoder (lr=1.5e-5) & Decoder (lr=4.0e-5) + SpecAugment
 #
 # Train:
 #   pip install -e ".[train]"
@@ -50,10 +51,13 @@ extra:
   chunk_max_seconds: 28.0
   max_input_seconds: 30
   label_max_length: 448
-  # Acoustic adaptation: freeze lower encoder, unfreeze top 8 layers w/ differential LR + SpecAugment.
+  # Preserve 51-language base weights: keep 100% of base encoder+decoder frozen
+  # (unfreeze_top_encoder_layers: 0) and adapt both encoder & decoder purely via
+  # low-rank rsLoRA with a conservative 1.5e-5 encoder LoRA LR + SpecAugment.
   freeze_encoder: true
-  unfreeze_top_encoder_layers: 8
+  unfreeze_top_encoder_layers: 0
   encoder_learning_rate: 1.5e-5
+  use_rslora: true
   apply_spec_augment: true
   mask_time_prob: 0.05
   mask_feature_prob: 0.04
