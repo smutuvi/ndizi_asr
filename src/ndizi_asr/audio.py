@@ -209,6 +209,7 @@ def chunk_waveform_by_vad(
     max_chunk_s: float,
     *,
     sampling_rate: int = TARGET_SR,
+    pad_overlap_s: float = 0.35,
 ) -> List[np.ndarray]:
     """Split long audio at Silero-VAD boundaries into chunks <= max_chunk_s."""
     import torch
@@ -237,9 +238,14 @@ def chunk_waveform_by_vad(
     chunks: List[np.ndarray] = []
     cur_start = timestamps[0]["start"]
     cur_end = timestamps[0]["start"]
+    total_s = len(waveform_16k) / float(sampling_rate)
 
     def emit(start_s: float, end_s: float) -> None:
-        s, e = int(start_s * sampling_rate), int(end_s * sampling_rate)
+        padded_s = max(0.0, start_s - pad_overlap_s) if chunks else max(0.0, start_s - 0.15)
+        padded_e = min(total_s, end_s + pad_overlap_s)
+        if padded_e - padded_s > 30.0:
+            padded_e = padded_s + 30.0
+        s, e = int(padded_s * sampling_rate), int(padded_e * sampling_rate)
         if e > s:
             chunks.append(waveform_16k[s:e])
 
@@ -292,6 +298,43 @@ def collapse_repetition_loops(text: str, max_repeats: int = 3) -> str:
     return out
 
 
+def _stitch_two_texts(left: str, right: str, max_overlap_words: int = 8) -> str:
+    """Stitch two adjacent chunk transcripts, deduplicating overlapping boundary words."""
+    import re
+
+    lw = left.strip().split()
+    rw = right.strip().split()
+    if not lw:
+        return right.strip()
+    if not rw:
+        return left.strip()
+
+    def _norm_w(w: str) -> str:
+        return re.sub(r"[^\w]", "", w.lower())
+
+    ln = [_norm_w(w) for w in lw]
+    rn = [_norm_w(w) for w in rw]
+    max_k = min(max_overlap_words, len(lw), len(rw))
+    best_k = 0
+    for k in range(max_k, 0, -1):
+        if ln[-k:] == rn[:k] and any(ln[-k:]):
+            best_k = k
+            break
+    if best_k == 0 and len(lw) >= 2 and len(rw) >= 2:
+        # Also check fuzzy 1-word boundary match when padded overlap repeats the last word
+        if ln[-1] and ln[-1] == rn[0]:
+            best_k = 1
+        elif len(rn) >= 2 and ln[-1] and ln[-1] == rn[1] and len(rn[0]) <= 3:
+            best_k = 2
+    merged = lw + rw[best_k:]
+    return " ".join(merged)
+
+
 def join_chunk_transcripts(parts: List[str]) -> str:
-    joined = " ".join(collapse_repetition_loops(p.strip()) for p in parts if p and str(p).strip())
-    return collapse_repetition_loops(joined)
+    cleaned = [collapse_repetition_loops(p.strip()) for p in parts if p and str(p).strip()]
+    if not cleaned:
+        return ""
+    acc = cleaned[0]
+    for nxt in cleaned[1:]:
+        acc = _stitch_two_texts(acc, nxt)
+    return collapse_repetition_loops(acc)

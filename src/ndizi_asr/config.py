@@ -45,6 +45,9 @@ class LocalModelConfig:
     device: Optional[str] = None  # cuda | mps | cpu | null=auto
     torch_dtype: Optional[str] = "auto"  # auto | float16 | bfloat16 | float32
     num_beams: int = 1
+    gemma_mbr: bool = False  # N-best Minimum Bayes Risk + train-prototype reranking via EmbeddingGemma
+    rag_prompt: bool = False  # Retrieval-augmented <startofprev> Whisper prompt conditioning
+    canonicalize_output: bool = False  # Canonicalize Swahili compounds/R-L/H-drop at output
     concurrency: int = 1
     omni_card: Optional[str] = None  # override Omnilingual card
     omnilingual_root: Optional[str] = None
@@ -238,6 +241,9 @@ def load_run_config(raw: dict[str, Any]) -> RunConfig:
             device=local_raw.get("device"),
             torch_dtype=local_raw.get("torch_dtype", "auto"),
             num_beams=int(local_raw.get("num_beams", 1)),
+            gemma_mbr=bool(local_raw.get("gemma_mbr", False)),
+            rag_prompt=bool(local_raw.get("rag_prompt", False)),
+            canonicalize_output=bool(local_raw.get("canonicalize_output", False)),
             concurrency=max(1, int(local_raw.get("concurrency", 1))),
             omni_card=local_raw.get("omni_card"),
             omnilingual_root=local_raw.get("omnilingual_root"),

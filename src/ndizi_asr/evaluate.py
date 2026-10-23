@@ -111,6 +111,9 @@ class BenchmarkRunner:
                 device=lw.device,
                 torch_dtype=lw.torch_dtype,
                 num_beams=lw.num_beams,
+                gemma_mbr=lw.gemma_mbr,
+                rag_prompt=lw.rag_prompt,
+                canonicalize_output=lw.canonicalize_output,
             )
         return self._whisper_clients[model_id]
 

@@ -169,6 +169,25 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Local model dtype: auto|float16|bfloat16|float32",
     )
+    p.add_argument("--num-beams", type=int, default=None, help="Local Whisper beam search width (default: 1)")
+    p.add_argument(
+        "--gemma-mbr",
+        action="store_true",
+        default=False,
+        help="Rerank N-best Whisper beams using EmbeddingGemma MBR + Ndizi train-corpus prototype similarity",
+    )
+    p.add_argument(
+        "--rag-prompt",
+        action="store_true",
+        default=False,
+        help="Condition Whisper <startofprev> prompt on nearest training utterance retrieved by EmbeddingGemma",
+    )
+    p.add_argument(
+        "--canonicalize-output",
+        action="store_true",
+        default=False,
+        help="Canonicalize Swahili compounds and R/L/H-drop variants in Whisper output",
+    )
     p.add_argument("--output-dir", default=None)
     p.add_argument("--experiment-name", default=None)
     p.add_argument("--prompt", default=None)
@@ -327,6 +346,14 @@ def apply_overrides(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, 
         local["device"] = args.device
     if args.torch_dtype:
         local["torch_dtype"] = args.torch_dtype
+    if getattr(args, "num_beams", None) is not None:
+        local["num_beams"] = int(args.num_beams)
+    if getattr(args, "gemma_mbr", False):
+        local["gemma_mbr"] = True
+    if getattr(args, "rag_prompt", False):
+        local["rag_prompt"] = True
+    if getattr(args, "canonicalize_output", False):
+        local["canonicalize_output"] = True
     if args.omni_card:
         local["omni_card"] = args.omni_card
     if args.omnilingual_root:

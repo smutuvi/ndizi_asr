@@ -145,6 +145,206 @@ def _chunk_audio(array: np.ndarray, sampling_rate: int, max_seconds: float = MAX
     return chunks
 
 
+class _GemmaMBRAndRAGHelper:
+    """Single-model inference booster using EmbeddingGemma-300M (or multilingual-e5 fallback).
+
+    Provides two inference-time capabilities without any external LLM API:
+    1. **N-Best Neural MBR + Prototype Reranking**:
+       Scores N Whisper beam candidates using:
+         - Acoustic sequence log-probability from Whisper
+         - Pairwise EmbeddingGemma Minimum Bayes Risk (MBR) semantic consensus
+         - Pairwise word-level lexical MBR consensus
+         - Cosine similarity to the nearest in-domain training utterances (smutuvi/ndizi-1-sw)
+         - Repetition / n-gram loop penalty
+    2. **Retrieval-Augmented `<|startofprev|>` Whisper Prompting (RAG-Whisper)**:
+       Retrieves the closest training transcript to a fast pass-1 decode and extracts
+       domain terms/phrasing to condition Whisper's `<|startofprev|>` prompt tokens.
+    """
+
+    def __init__(
+        self,
+        *,
+        device: str = "cuda",
+        model_id: str = "google/embeddinggemma-300m",
+        fallback_model_id: str = "intfloat/multilingual-e5-base",
+        corpus_dataset_id: str = "smutuvi/ndizi-1-sw",
+    ) -> None:
+        import torch
+        from transformers import AutoModel, AutoTokenizer
+
+        self.torch = torch
+        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
+        self.model = None
+        self.tokenizer = None
+        self.loaded_id: Optional[str] = None
+        self.corpus_texts: list[str] = []
+        self.corpus_embs = None
+
+        hf_tok = _hf_token()
+        kw = {"token": hf_tok} if hf_tok else {}
+        for cand in (model_id, fallback_model_id):
+            if not cand:
+                continue
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(cand, **kw)
+                self.model = AutoModel.from_pretrained(cand, **kw).to(self.device)
+                self.model.eval()
+                for p in self.model.parameters():
+                    p.requires_grad = False
+                self.loaded_id = cand
+                logger.info("Loaded EmbeddingGemma/semantic reranker %s on %s", cand, self.device)
+                break
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Could not load semantic model %s (%s); trying fallback", cand, exc)
+
+        if self.model is not None and corpus_dataset_id:
+            self._load_train_corpus(corpus_dataset_id)
+
+    @property
+    def available(self) -> bool:
+        return self.model is not None and self.tokenizer is not None
+
+    def encode(self, texts: list[str], batch_size: int = 64) -> np.ndarray:
+        if not self.available or not texts:
+            return np.zeros((len(texts), 1), dtype=np.float32)
+        torch = self.torch
+        from ..ethio_normalize import clean_swahili_fair_transcription
+
+        normed = [clean_swahili_fair_transcription(t) or t.lower().strip() or "a" for t in texts]
+        all_vecs = []
+        with torch.no_grad():
+            for i in range(0, len(normed), batch_size):
+                batch = normed[i : i + batch_size]
+                enc = self.tokenizer(
+                    batch,
+                    padding=True,
+                    truncation=True,
+                    max_length=256,
+                    return_tensors="pt",
+                ).to(self.device)
+                out = self.model(**enc)
+                hidden = getattr(out, "last_hidden_state", None)
+                if hidden is None:
+                    vecs = out[0]
+                else:
+                    mask = enc["attention_mask"].unsqueeze(-1).float()
+                    vecs = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-6)
+                vecs = torch.nn.functional.normalize(vecs.float(), p=2, dim=-1)
+                all_vecs.append(vecs.cpu().numpy())
+        return np.vstack(all_vecs)
+
+    def _load_train_corpus(self, dataset_id: str) -> None:
+        import csv
+        from huggingface_hub import hf_hub_download
+        from ..ethio_normalize import clean_swahili_training_target
+
+        texts: list[str] = []
+        for cand_rel in ("data/train/metadata.csv", "train/metadata.csv"):
+            try:
+                local_csv = hf_hub_download(repo_id=dataset_id, filename=cand_rel, repo_type="dataset")
+                with open(local_csv, "r", encoding="utf-8") as f:
+                    for row in csv.DictReader(f):
+                        t = clean_swahili_training_target(str(row.get("transcript") or row.get("text") or ""))
+                        if len(t.split()) >= 4:
+                            texts.append(t)
+                if texts:
+                    break
+            except Exception:  # noqa: BLE001
+                continue
+        if texts:
+            self.corpus_texts = texts
+            self.corpus_embs = self.encode(texts, batch_size=128)
+            logger.info(
+                "Indexed %d training transcripts from %s with %s for MBR/RAG",
+                len(texts),
+                dataset_id,
+                self.loaded_id,
+            )
+
+    def retrieve_prompt_context(self, draft_text: str, top_k: int = 2) -> str:
+        """Retrieve nearest training utterances and build a concise domain prefix."""
+        if not draft_text.strip() or self.corpus_embs is None or not self.corpus_texts:
+            return ""
+        q = self.encode([draft_text])[0]
+        sims = self.corpus_embs @ q
+        top_idx = np.argsort(-sims)[:top_k]
+        # Take the opening question/context clause (up to 28 words) from top neighbor
+        best_txt = self.corpus_texts[int(top_idx[0])]
+        words = best_txt.split()[:28]
+        return " ".join(words)
+
+    def rerank_nbest(
+        self,
+        candidates: list[str],
+        seq_scores: list[float],
+    ) -> str:
+        """Select best hypothesis via Acoustic LogProb + EmbeddingGemma MBR + Corpus Prior."""
+        import re
+        from ..ethio_normalize import clean_swahili_fair_transcription
+
+        valid = [(c.strip(), float(s)) for c, s in zip(candidates, seq_scores) if c and c.strip()]
+        if not valid:
+            return ""
+        if len(valid) == 1:
+            return valid[0][0]
+
+        hyps = [v[0] for v in valid]
+        scores = np.asarray([v[1] for v in valid], dtype=np.float64)
+        # Normalize acoustic scores across beams to [0, 1]
+        s_std = float(scores.std())
+        ac_norm = (scores - scores.mean()) / (s_std + 1e-5) if s_std > 1e-6 else np.zeros_like(scores)
+
+        # 1) Lexical token-F1 MBR consensus across beams
+        norm_hyps = [clean_swahili_fair_transcription(h) or h.lower() for h in hyps]
+        tok_sets = [set(nh.split()) for nh in norm_hyps]
+        lex_mbr = np.zeros(len(hyps), dtype=np.float64)
+        for i in range(len(hyps)):
+            if not tok_sets[i]:
+                continue
+            sims = []
+            for j in range(len(hyps)):
+                if not tok_sets[j]:
+                    continue
+                inter = len(tok_sets[i] & tok_sets[j])
+                f1 = (2.0 * inter) / max(len(tok_sets[i]) + len(tok_sets[j]), 1)
+                sims.append(f1)
+            lex_mbr[i] = float(np.mean(sims)) if sims else 0.0
+
+        # 2) EmbeddingGemma semantic MBR + in-domain train prototype similarity
+        sem_mbr = np.zeros(len(hyps), dtype=np.float64)
+        proto_sim = np.zeros(len(hyps), dtype=np.float64)
+        if self.available:
+            embs = self.encode(hyps)
+            sim_mat = embs @ embs.T
+            sem_mbr = sim_mat.mean(axis=1).astype(np.float64)
+            if self.corpus_embs is not None and len(self.corpus_embs) > 0:
+                c_sims = embs @ self.corpus_embs.T
+                top5 = np.sort(c_sims, axis=1)[:, -5:]
+                proto_sim = top5.mean(axis=1).astype(np.float64)
+
+        # 3) Repetition / loop penalty
+        rep_pen = np.zeros(len(hyps), dtype=np.float64)
+        for i, nh in enumerate(norm_hyps):
+            ws = nh.split()
+            if len(ws) >= 6:
+                bigrams = [f"{ws[k]}_{ws[k+1]}" for k in range(len(ws) - 1)]
+                uniq_ratio = len(set(bigrams)) / float(len(bigrams))
+                if uniq_ratio < 0.72:
+                    rep_pen[i] += (0.72 - uniq_ratio) * 2.5
+            if re.search(r"\b(\w+)(?:\s+\1){2,}\b", nh):
+                rep_pen[i] += 0.5
+
+        total = (
+            0.45 * ac_norm
+            + 0.85 * lex_mbr
+            + 0.65 * sem_mbr
+            + 0.35 * proto_sim
+            - rep_pen
+        )
+        best_idx = int(np.argmax(total))
+        return hyps[best_idx]
+
+
 class HuggingFaceWhisperClient:
     """Local Whisper ASR via transformers (supports Sunbird African Whisper)."""
 
@@ -155,6 +355,9 @@ class HuggingFaceWhisperClient:
         device: Optional[str] = None,
         torch_dtype: Optional[str] = None,
         num_beams: int = 1,
+        gemma_mbr: bool = False,
+        rag_prompt: bool = False,
+        canonicalize_output: bool = False,
         token: Optional[str] = None,
     ) -> None:
         try:
@@ -167,8 +370,14 @@ class HuggingFaceWhisperClient:
             ) from exc
 
         self.model_id = model_id
-        self.num_beams = num_beams
+        self.num_beams = max(1, int(num_beams))
+        self.gemma_mbr = bool(gemma_mbr)
+        self.rag_prompt = bool(rag_prompt)
+        self.canonicalize_output = bool(canonicalize_output)
+        if (self.gemma_mbr) and self.num_beams < 5:
+            self.num_beams = 5
         self.torch = torch
+        self._gemma_helper: Optional[_GemmaMBRAndRAGHelper] = None
         hf_token = token if token is not None else _hf_token()
 
         if device:
@@ -252,6 +461,8 @@ class HuggingFaceWhisperClient:
             self.model.generation_config.task = None
         self._transcribe_tok = self.processor.tokenizer.convert_tokens_to_ids("<|transcribe|>")
         self._notimestamps_tok = self.processor.tokenizer.convert_tokens_to_ids("<|notimestamps|>")
+        if self.gemma_mbr or self.rag_prompt:
+            self._gemma_helper = _GemmaMBRAndRAGHelper(device=str(self.device))
 
     def _forced_decoder_ids(
         self,
@@ -285,14 +496,27 @@ class HuggingFaceWhisperClient:
     ) -> TranscriptionResult:
         started = time.perf_counter()
         try:
+            from ..audio import join_chunk_transcripts
+            from ..ethio_normalize import clean_swahili_training_target
+
             forced = self._forced_decoder_ids(language, language_config)
             audio = _resample_linear(np.asarray(audio_array), int(sampling_rate), SAMPLE_RATE)
             if audio.ndim > 1:
                 audio = audio.mean(axis=-1)
             texts: list[str] = []
+            prev_chunk_tail: str = ""
             for chunk in _chunk_audio(audio, SAMPLE_RATE):
-                texts.append(self._transcribe_chunk(chunk, forced))
-            text = " ".join(t.strip() for t in texts if t.strip()).strip()
+                chunk_txt = self._transcribe_chunk(
+                    chunk,
+                    forced,
+                    prev_context=prev_chunk_tail,
+                )
+                if chunk_txt.strip():
+                    texts.append(chunk_txt.strip())
+                    prev_chunk_tail = " ".join(chunk_txt.strip().split()[-18:])
+            text = join_chunk_transcripts(texts)
+            if self.canonicalize_output and text:
+                text = clean_swahili_training_target(text)
             return TranscriptionResult(
                 text=text,
                 latency_seconds=time.perf_counter() - started,
@@ -307,7 +531,13 @@ class HuggingFaceWhisperClient:
                 error=str(exc),
             )
 
-    def _transcribe_chunk(self, audio: np.ndarray, forced_decoder_ids: list[tuple[int, int]]) -> str:
+    def _transcribe_chunk(
+        self,
+        audio: np.ndarray,
+        forced_decoder_ids: list[tuple[int, int]],
+        *,
+        prev_context: str = "",
+    ) -> str:
         torch = self.torch
         # Match whisper_trainer.py feature extraction (do_normalize=False by default)
         # on local/Ndizi fine-tunes; keep do_normalize=True for zero-shot Sunbird hub models.
@@ -323,13 +553,66 @@ class HuggingFaceWhisperClient:
             return_tensors="pt",
         )
         input_features = inputs.input_features.to(self.device, dtype=self.model.dtype)
+
+        # Optional Pass-1 RAG prompt lookup via EmbeddingGemma
+        prompt_ids_tensor = None
+        if self.rag_prompt and self._gemma_helper is not None and self._gemma_helper.available:
+            with torch.inference_mode():
+                draft_ids = self.model.generate(
+                    input_features,
+                    forced_decoder_ids=forced_decoder_ids,
+                    max_new_tokens=96,
+                    num_beams=1,
+                    do_sample=False,
+                )
+            draft_txt = self.processor.batch_decode(draft_ids, skip_special_tokens=True)[0].strip()
+            ctx_str = self._gemma_helper.retrieve_prompt_context(draft_txt)
+            if prev_context:
+                ctx_str = f"{ctx_str} {prev_context}".strip()
+            if ctx_str:
+                try:
+                    p_ids = self.processor.get_prompt_ids(ctx_str, return_tensors="pt")
+                    prompt_ids_tensor = p_ids.to(self.device)
+                except Exception:  # noqa: BLE001
+                    prompt_ids_tensor = None
+
+        gen_kwargs: dict = dict(
+            forced_decoder_ids=forced_decoder_ids,
+            max_new_tokens=256,
+            num_beams=self.num_beams,
+            do_sample=False,
+        )
+        if prompt_ids_tensor is not None:
+            gen_kwargs["prompt_ids"] = prompt_ids_tensor
+
+        if self.gemma_mbr and self.num_beams > 1 and self._gemma_helper is not None:
+            n_ret = min(self.num_beams, 6)
+            with torch.inference_mode():
+                out = self.model.generate(
+                    input_features,
+                    num_return_sequences=n_ret,
+                    return_dict_in_generate=True,
+                    output_scores=True,
+                    length_penalty=1.0,
+                    **gen_kwargs,
+                )
+            seqs = out.sequences
+            cands = self.processor.batch_decode(
+                seqs,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False,
+            )
+            seq_scores = (
+                out.sequences_scores.detach().float().cpu().tolist()
+                if getattr(out, "sequences_scores", None) is not None
+                else [0.0] * len(cands)
+            )
+            return self._gemma_helper.rerank_nbest(cands, seq_scores)
+
         with torch.inference_mode():
             predicted_ids = self.model.generate(
                 input_features,
-                forced_decoder_ids=forced_decoder_ids,
-                max_new_tokens=256,
-                num_beams=self.num_beams,
-                do_sample=False,
+                **gen_kwargs,
             )
         texts = self.processor.batch_decode(
             predicted_ids,
