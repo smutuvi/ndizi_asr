@@ -1,8 +1,9 @@
 # Stage-1 SunflowerASR-51 LoRA on smutuvi/ndizi-1-sw — deploy baseline.
-# - Dataset QC: glued-punctuation repair + speech-rate / tiny-transcript filtering
-# - Long audio: MMS_FA / Silero-VAD chunking of clips >30s into <=28s segments
-#   (reports under outputs/<experiment>/qc/). Encoder stays frozen (Move B enc8
-#   unfreeze is configs/train_sunbird51_ndizi_fullaudio_enc_lora.yaml).
+# Combines all single-model quality & acoustic improvements:
+#   1. Dataset QC: glued-punctuation repair + speech-rate / tiny-transcript filtering
+#   2. Canonicalized Swahili training targets (compounds, Bantu R/L & H-drop, mojibake)
+#   3. Long audio: MMS_FA / Silero-VAD chunking of 1,550 clips >30s into <=28s segments
+#   4. Top-8 encoder unfreeze (lr=1.5e-5) + SpecAugment + rank-32 decoder LoRA (lr=4.0e-5)
 #
 # Train:
 #   pip install -e ".[train]"
@@ -27,7 +28,7 @@ output_dir: outputs
 num_train_epochs: 5
 per_device_train_batch_size: 4
 gradient_accumulation_steps: 4
-learning_rate: 5.0e-5
+learning_rate: 4.0e-5
 warmup_ratio: 0.08
 fp16: true
 logging_steps: 25
@@ -39,6 +40,7 @@ extra:
     - smutuvi/ndizi-1-sw
   # QC: repair glued punct; drop speech-rate / empty / tiny labels (~21 train rows).
   apply_data_qc: true
+  canonicalize_train_text: true
   filter_eval_outliers: false
   min_chars_per_sec: 2.5
   max_chars_per_sec: 26.0
@@ -48,7 +50,13 @@ extra:
   chunk_max_seconds: 28.0
   max_input_seconds: 30
   label_max_length: 448
+  # Acoustic adaptation: freeze lower encoder, unfreeze top 8 layers w/ differential LR + SpecAugment.
   freeze_encoder: true
+  unfreeze_top_encoder_layers: 8
+  encoder_learning_rate: 1.5e-5
+  apply_spec_augment: true
+  mask_time_prob: 0.05
+  mask_feature_prob: 0.04
   # Must stay 0: label smoothing pops labels before Whisper forward (breaks decoder_input_ids).
   label_smoothing_factor: 0.0
   lr_scheduler_type: cosine

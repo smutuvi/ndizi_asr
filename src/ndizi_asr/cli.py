@@ -128,12 +128,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--normalize",
-        choices=["default", "ethio", "oromo_platform", "oromo_fair", "none"],
+        choices=["default", "ethio", "oromo_platform", "oromo_fair", "swahili_fair", "swahili_canon", "none"],
         default=None,
         help=(
             "Scoring text normalization: ethio = Ge'ez/Latin cleanup; "
             "oromo_platform = colleague tidy (NFKC, lower, punct→space, collapse); "
-            "oromo_fair = platform + hudhaa strip + spelling map + gemination collapse"
+            "oromo_fair = platform + hudhaa strip + spelling map + gemination collapse; "
+            "swahili_fair = compound words + Bantu R/L & H-drop map + backchannel strip"
         ),
     )
     p.add_argument("--omni-card", default=None, help="Override Omnilingual model card")

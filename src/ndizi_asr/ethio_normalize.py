@@ -198,3 +198,199 @@ def clean_oromo_fair_transcription(text: str) -> str:
     t = _apply_oromo_spelling_map(t)
     t = _collapse_qubee_gemination(t)
     return re.sub(r"\s+", " ", t).strip()
+
+
+# ---------------------------------------------------------------------------
+# Swahili Spoken-Survey Fair Normalizer (ndizi-1-sw / rural East African ASR)
+# ---------------------------------------------------------------------------
+# Canonicalizes orthographic / dialectal surface variants that denote the exact
+# same spoken Swahili word across different human annotators:
+#   1. Compound vs split conjunctions/adverbs (kwa sababu <-> kwasababu, etc.)
+#   2. Bantu L1 R/L & H-drop survey variants (vizuli->vizuri, kuusu->kuhusu, etc.)
+#   3. Expressive vowel/nasal lengthening (labdaaa->labda, chaaa->cha, mmmh->mmh)
+#   4. Spoken backchannels/hesitations (mmh, eeh, aah, m) optionally stripped.
+
+_SWAHILI_MOJIBAKE_RE = re.compile(r"(‚ä¶|â€¦|â€™|â€œ|â€|\ufffd)")
+_SWAHILI_TRIPLE_CHAR_RE = re.compile(r"(.)\1{2,}")
+_SWAHILI_BACKCHANNEL_RE = re.compile(
+    r"\b(?:m+h+|h+m+|e+h+|a+h+|u+h+|o+h+|m{2,}|e{2,}|a{2,}|u{2,})\b"
+)
+
+_SWAHILI_COMPOUND_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\bkwa\s+sababu\b"), "kwasababu"),
+    (re.compile(r"\bkwa\s+kweli\b"), "kwakweli"),
+    (re.compile(r"\bkwa\s+hiyo\b"), "kwahiyo"),
+    (re.compile(r"\bkwa\s+hivyo\b"), "kwahivyo"),
+    (re.compile(r"\bkwa\s+iyo\b"), "kwahiyo"),
+    (re.compile(r"\bkwa\s+ivyo\b"), "kwahivyo"),
+    (re.compile(r"\bvile\s+vile\b"), "vilevile"),
+    (re.compile(r"\bmbali\s+mbali\b"), "mbalimbali"),
+    (re.compile(r"\bmmoja\s+mmoja\b"), "mmojammoja"),
+    (re.compile(r"\bkidogo\s+kidogo\b"), "kidogokidogo"),
+    (re.compile(r"\bpole\s+pole\b"), "polepole"),
+    (re.compile(r"\bsawa\s+sawa\b"), "sawa"),
+    (re.compile(r"\bjuu\s+ya\b"), "juuya"),
+]
+
+_SWAHILI_SPELLING_MAP: dict[str, str] = {
+    # L1 Bantu R/L alternation in rural Tanzania
+    "vizuli": "vizuri",
+    "nzuli": "nzuri",
+    "mzuli": "mzuri",
+    "wazuli": "wazuri",
+    "pazuli": "pazuri",
+    "kazuli": "kazuri",
+    "uzuli": "uzuri",
+    "mazuli": "mazuri",
+    "mizuli": "mizuri",
+    "zuli": "zuri",
+    "kitaru": "kitalu",
+    "malage": "maharage",
+    " tayali": "tayari",
+    "tayali": "tayari",
+    "habali": "habari",
+    "hatali": "hatari",
+    "sukali": "sukari",
+    "daktali": "daktari",
+    "serikali": "serikali",
+    "angalau": "angalau",
+    # Intervocalic / initial H-drop & glide spelling variants
+    "apa": "hapa",
+    "apo": "hapo",
+    "ata": "hata",
+    "ela": "hela",
+    "ali": "hali",
+    "awa": "hawa",
+    "aya": "haya",
+    "ii": "hii",
+    "izi": "hizi",
+    "uku": "huku",
+    "uko": "huko",
+    "uu": "huu",
+    "uenda": "huenda",
+    "kuusu": "kuhusu",
+    "kusu": "kuhusu",
+    "marage": "maharage",
+    "maarage": "maharage",
+    "maharagi": "maharage",
+    "maragi": "maharage",
+    "mauwa": "maua",
+    "mvula": "mvua",
+    "mvuwa": "mvua",
+    "juwa": "jua",
+    "kuwa": "kua",
+    "hio": "hiyo",
+    "hivo": "hivyo",
+    "ivyo": "hivyo",
+    "ivo": "hivyo",
+    "iyo": "hiyo",
+    "io": "hiyo",
+    "kwaio": "kwahiyo",
+    "kwaiyo": "kwahiyo",
+    "kwahio": "kwahiyo",
+    "kwaivo": "kwahivyo",
+    "kwaivyo": "kwahivyo",
+    "kwasabu": "kwasababu",
+    "mana": "maana",
+    "naa": "na",
+    "yaa": "ya",
+    "waa": "wa",
+    "zaa": "za",
+    "vizurii": "vizuri",
+    "mzurii": "mzuri",
+    "nzurii": "nzuri",
+    "sawasawa": "sawa",
+    # Common colloquial / standard pairs in Ndizi survey prompts & responses
+    "yaani": "yani",
+    "ndio": "ndo",
+    "ndiyo": "ndo",
+    "sasaivi": "sasahivi",
+    "sahivi": "sasahivi",
+    "iliopo": "iliyopo",
+    "ulio": "uliyo",
+    "walio": "waliyo",
+    "zilizo": "zilizopo",
+    "ambazo": "ambazo",
+    "naipendaa": "naipenda",
+    "imesha": "imeisha",
+    " teh": "eeh",
+}
+
+
+def clean_swahili_fair_transcription(
+    text: str,
+    *,
+    drop_backchannels: bool = True,
+) -> str:
+    """Swahili survey fair normalization (compounds, R/L & H-drop, backchannels).
+
+    Applied identically to reference and hypothesis so neither model nor
+    annotator is penalized for purely orthographic choices in spontaneous
+    farmer interviews.
+    """
+    t = unicodedata.normalize("NFKC", str(text or ""))
+    t = _SWAHILI_MOJIBAKE_RE.sub(" ", t)
+    t = t.lower()
+    # Keep intra-word apostrophe in ng'ombe -> ngombe before punct->space
+    t = _GLOTTAL_RE.sub("", t)
+    t = _PLATFORM_PUNCT_RE.sub(" ", t)
+    # Collapse 3+ repeated letters from expressive elongation (labdaaa -> labda)
+    t = _SWAHILI_TRIPLE_CHAR_RE.sub(r"\1", t)
+    # Normalize compound words before token mapping
+    t = re.sub(r"\s+", " ", t).strip()
+    for pat, repl in _SWAHILI_COMPOUND_PATTERNS:
+        t = pat.sub(repl, t)
+    if drop_backchannels:
+        t = _SWAHILI_BACKCHANNEL_RE.sub(" ", t)
+    else:
+        t = re.sub(r"\b(?:m+h+|h+m+|m{2,})\b", "mmh", t)
+        t = re.sub(r"\b(?:e+h+|e{2,})\b", "eeh", t)
+        t = re.sub(r"\b(?:a+h+|a{2,})\b", "aah", t)
+    tokens = []
+    for tok in t.split():
+        # Strip stray single-letter 'm' hesitation tokens at clause boundaries
+        if drop_backchannels and tok in {"m", "hm", "mm", "eh", "ah", "uh", "oh"}:
+            continue
+        tokens.append(_SWAHILI_SPELLING_MAP.get(tok, tok))
+    return " ".join(tokens)
+
+
+def clean_swahili_training_target(text: str) -> str:
+    """Canonicalize Swahili training labels while preserving sentence punctuation.
+
+    Repairs glued punctuation, strips mojibake, collapses 3+ letter elongations
+    (``labdaaa`` -> ``labda``), standardizes backchannels (``mmmh`` -> ``mmh``),
+    and canonicalizes R/L, H-drop, and compound-word spelling variants so the
+    Whisper decoder learns a single consistent orthography.
+    """
+    t = unicodedata.normalize("NFKC", str(text or ""))
+    t = _SWAHILI_MOJIBAKE_RE.sub(" ", t)
+    # Insert space after glued sentence punctuation: "vizuri.ndio" -> "vizuri. ndio"
+    t = re.sub(r"([.,?!;:])([^\W\d_])", r"\1 \2", t, flags=re.UNICODE)
+    # Collapse 3+ repeated letters (case-insensitive)
+    t = re.sub(r"([a-zA-Z])\1{2,}", r"\1", t)
+    # Canonicalize compound expressions (case-insensitive)
+    for pat, repl in _SWAHILI_COMPOUND_PATTERNS:
+        t = re.sub(pat.pattern, repl, t, flags=re.IGNORECASE)
+    # Canonicalize word tokens while keeping trailing punctuation attached
+    out_tokens: list[str] = []
+    for raw_tok in t.split():
+        m = re.match(r"^([^\w]*)([\w']+)([^\w]*)$", raw_tok, flags=re.UNICODE)
+        if not m:
+            continue
+        lead, core, trail = m.groups()
+        low = core.lower()
+        if re.fullmatch(r"(?:m+h+|h+m+|m{2,})", low):
+            canon = "mmh"
+        elif re.fullmatch(r"(?:e+h+|e{2,})", low):
+            canon = "eeh"
+        elif re.fullmatch(r"(?:a+h+|a{2,})", low):
+            canon = "aah"
+        else:
+            canon = _SWAHILI_SPELLING_MAP.get(low, core)
+            if core and core[0].isupper() and canon and canon != core:
+                canon = canon[0].upper() + canon[1:]
+        out_tokens.append(f"{lead}{canon}{trail}")
+    return re.sub(r"\s+", " ", " ".join(out_tokens)).strip()
+
+

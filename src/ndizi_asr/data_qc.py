@@ -350,11 +350,14 @@ def rescore_predictions_file(
             rows = list(csv.DictReader(f))
 
     norm_cfg = NormalizationConfig(mode="default", lowercase=True, strip_punctuation=True, collapse_whitespace=True)
+    fair_cfg = NormalizationConfig(mode="swahili_fair", lowercase=True, strip_punctuation=True, collapse_whitespace=True)
 
     refs_raw, hyps_raw = [], []
     refs_legacy, hyps_legacy = [], []
     refs_fixed, hyps_fixed = [], []
     refs_clean, hyps_clean = [], []
+    refs_fair, hyps_fair = [], []
+    refs_fair_clean, hyps_fair_clean = [], []
 
     outlier_rows: List[Dict[str, Any]] = []
     glued_count = 0
@@ -371,6 +374,8 @@ def rescore_predictions_file(
         h_leg = _norm_legacy_glued(hyp)
         r_fix = normalize_text(ref, norm_cfg)
         h_fix = normalize_text(hyp, norm_cfg)
+        r_fair = normalize_text(ref, fair_cfg)
+        h_fair = normalize_text(hyp, fair_cfg)
 
         refs_raw.append(ref)
         hyps_raw.append(hyp)
@@ -378,6 +383,9 @@ def rescore_predictions_file(
         hyps_legacy.append(h_leg)
         refs_fixed.append(r_fix)
         hyps_fixed.append(h_fix)
+        if r_fair:
+            refs_fair.append(r_fair)
+            hyps_fair.append(h_fair)
 
         utt_wer = float(process_words(r_fix, h_fix).wer) if r_fix else 0.0
         utt_cer = float(jiwer_cer(r_fix, h_fix)) if r_fix else 0.0
@@ -414,6 +422,9 @@ def rescore_predictions_file(
         else:
             refs_clean.append(r_fix)
             hyps_clean.append(h_fix)
+            if r_fair:
+                refs_fair_clean.append(r_fair)
+                hyps_fair_clean.append(h_fair)
 
     res = {
         "file": str(pred_path),
@@ -426,6 +437,8 @@ def rescore_predictions_file(
         "cer_legacy_glued_norm": round(float(jiwer_cer(refs_legacy, hyps_legacy)), 4),
         "wer_fixed_punct_norm": round(float(jiwer_wer(refs_fixed, hyps_fixed)), 4),
         "cer_fixed_punct_norm": round(float(jiwer_cer(refs_fixed, hyps_fixed)), 4),
+        "wer_swahili_fair": round(float(jiwer_wer(refs_fair, hyps_fair)), 4) if refs_fair else 0.0,
+        "cer_swahili_fair": round(float(jiwer_cer(refs_fair, hyps_fair)), 4) if refs_fair else 0.0,
         "delta_wer_from_punct_fix": round(
             float(jiwer_wer(refs_fixed, hyps_fixed)) - float(jiwer_wer(refs_legacy, hyps_legacy)), 4
         ),
@@ -433,6 +446,8 @@ def rescore_predictions_file(
         "n_outliers_flagged": len(outlier_rows),
         "wer_clean_subset": round(float(jiwer_wer(refs_clean, hyps_clean)), 4) if refs_clean else 0.0,
         "cer_clean_subset": round(float(jiwer_cer(refs_clean, hyps_clean)), 4) if refs_clean else 0.0,
+        "wer_swahili_fair_clean": round(float(jiwer_wer(refs_fair_clean, hyps_fair_clean)), 4) if refs_fair_clean else 0.0,
+        "cer_swahili_fair_clean": round(float(jiwer_cer(refs_fair_clean, hyps_fair_clean)), 4) if refs_fair_clean else 0.0,
         "outliers_by_reason": dict(Counter(x["outlier_reason"] for x in outlier_rows)),
     }
 
@@ -642,23 +657,23 @@ def main(argv: Optional[List[str]] = None) -> int:
             rescored_list.append(r_info)
 
     if rescored_list:
-        print("\n=== Re-scored Predictions: Glued-Punctuation Fix & Outlier Audit ===")
+        print("\n=== Re-scored Predictions: Glued-Punctuation Fix, Swahili-Fair & Outlier Audit ===")
         hdr = (
-            f"{'Prediction File':52} | {'n':>4} | {'Glued%':>6} | "
-            f"{'Legacy WER':>10} | {'Fixed WER↓':>10} | {'Fixed CER↓':>10} | {'Clean WER (n)':>16}"
+            f"{'Prediction File':44} | {'n':>4} | {'Legacy':>7} | "
+            f"{'Fixed WER↓':>10} | {'Fixed CER↓':>10} | {'Clean WER (n)':>15} | {'Fair WER↓':>9} | {'Fair Clean↓':>11}"
         )
         print(hdr)
         print("-" * len(hdr))
         for r in rescored_list:
             fp = Path(r["file"])
             parent = fp.parent.name
-            exp = fp.parent.parent.name if parent.startswith(("hf__", "outputs__", "sunbird")) else parent
-            short_name = f"{exp}/{fp.name}"[-52:]
+            exp = fp.parent.parent.name if parent.startswith(("hf__", "outputs__", "sunbird", "hf_outputs")) else parent
+            short_name = f"{exp}/{fp.name}"[-44:]
             clean_str = f"{r['wer_clean_subset']:.4f} ({r['n_clean_after_outlier_filter']})"
             print(
-                f"{short_name:52} | {r['n_total']:4d} | {r['glued_punctuation_pct']:5.1f}% | "
-                f"{r['wer_legacy_glued_norm']:10.4f} | {r['wer_fixed_punct_norm']:10.4f} | "
-                f"{r['cer_fixed_punct_norm']:10.4f} | {clean_str:>16}"
+                f"{short_name:44} | {r['n_total']:4d} | {r['wer_legacy_glued_norm']:7.4f} | "
+                f"{r['wer_fixed_punct_norm']:10.4f} | {r['cer_fixed_punct_norm']:10.4f} | "
+                f"{clean_str:>15} | {r['wer_swahili_fair']:9.4f} | {r['wer_swahili_fair_clean']:11.4f}"
             )
             if r["outliers_by_reason"]:
                 print(f"   -> Flagged test outliers ({r['n_outliers_flagged']}): {json.dumps(r['outliers_by_reason'])}")

@@ -548,14 +548,22 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
             except Exception:  # noqa: BLE001
                 pass
 
+    from ndizi_asr.ethio_normalize import clean_swahili_training_target
     from ndizi_asr.metrics import clean_glued_punctuation
+
+    canon_targets = bool(cfg.extra.get("canonicalize_train_text", False))
 
     def prepare(batch: dict) -> dict:
         audio = batch[audio_col]
         arr = np.asarray(audio["array"], dtype=np.float32)
         sr = int(audio["sampling_rate"])
         dur = len(arr) / max(sr, 1)
-        clean_txt = clean_glued_punctuation(str(batch.get(text_col) or ""))
+        raw_txt = str(batch.get(text_col) or "")
+        clean_txt = (
+            clean_swahili_training_target(raw_txt)
+            if canon_targets
+            else clean_glued_punctuation(raw_txt)
+        )
         batch["_drop"] = dur > max_input_s or not clean_txt
         batch["input_features"] = processor.feature_extractor(arr, sampling_rate=sr).input_features[0]
         batch["labels"] = processor.tokenizer(
@@ -600,6 +608,15 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
     model.config.forced_decoder_ids = None
     if hasattr(model, "config"):
         model.config.suppress_tokens = []
+        if bool(cfg.extra.get("apply_spec_augment", False)):
+            model.config.apply_spec_augment = True
+            model.config.mask_time_prob = float(cfg.extra.get("mask_time_prob", 0.05))
+            model.config.mask_feature_prob = float(cfg.extra.get("mask_feature_prob", 0.04))
+            logger.info(
+                "Enabled Whisper SpecAugment (mask_time_prob=%.3f, mask_feature_prob=%.3f)",
+                model.config.mask_time_prob,
+                model.config.mask_feature_prob,
+            )
     if cfg.extra.get("gradient_checkpointing", True):
         model.config.use_cache = False
         if hasattr(model, "enable_input_require_grads"):

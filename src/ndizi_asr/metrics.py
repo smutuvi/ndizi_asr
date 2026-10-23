@@ -12,6 +12,7 @@ from .ethio_normalize import (
     clean_ethio_transcription,
     clean_oromo_fair_transcription,
     clean_oromo_platform_transcription,
+    clean_swahili_fair_transcription,
 )
 
 
@@ -49,6 +50,10 @@ def normalize_text(
         return clean_oromo_platform_transcription(text)
     if mode in {"oromo_fair", "oromo-fair", "qubee"}:
         return clean_oromo_fair_transcription(text)
+    if mode in {"swahili_fair", "swahili-fair", "ndizi_fair", "sw_fair"}:
+        return clean_swahili_fair_transcription(text, drop_backchannels=True)
+    if mode in {"swahili_canon", "swahili-canon"}:
+        return clean_swahili_fair_transcription(text, drop_backchannels=False)
 
     out = text or ""
     if cfg.lowercase:
