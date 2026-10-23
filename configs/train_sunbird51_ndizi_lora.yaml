@@ -12,12 +12,12 @@
 #   ndizi-asr-train --config configs/train_sunbird51_ndizi_lora.yaml
 #
 # Eval:
-#   ndizi-asr --model hf:outputs/sunflower51_ndizi1sw_lora_qc/merged \
+#   ndizi-asr --model hf:outputs/sunflower51_ndizi1sw_lora_qc_v2/merged \
 #     --dataset smutuvi/ndizi-1-sw --split test --text-column transcript \
-#     --device cuda --experiment-name sunflower51_ndizi1sw_lora_qc_test
+#     --device cuda --experiment-name sunflower51_ndizi1sw_lora_qc_v2_test
 
 dataset_id: smutuvi/ndizi-1-sw
-experiment_name: sunflower51_ndizi1sw_lora_qc
+experiment_name: sunflower51_ndizi1sw_lora_qc_v2
 backend: whisper
 model_id: Sunbird/SunflowerASR-51-african-languages
 language: swahili
