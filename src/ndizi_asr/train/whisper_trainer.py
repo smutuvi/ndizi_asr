@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 os.environ.setdefault("HF_DATASETS_DISABLE_TORCHCODEC", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import numpy as np
 import torch
-from datasets import Audio, Dataset, concatenate_datasets, load_dataset
+from datasets import Audio, Dataset, concatenate_datasets, load_dataset, load_from_disk
 from transformers import (
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
@@ -88,9 +89,23 @@ def _load_merged_split(hub_ids: List[str], split: str, *, audio_col: str) -> Dat
 @dataclass
 class DataCollatorSpeechSeq2SeqWithPadding:
     processor: Any
+    audio_col: str = "audio"
+    max_input_seconds: float = 30.0
 
     def __call__(self, features: List[dict]) -> dict:
-        input_features = [{"input_features": f["input_features"]} for f in features]
+        input_features = []
+        for f in features:
+            if "input_features" in f and f["input_features"] is not None:
+                input_features.append({"input_features": f["input_features"]})
+            else:
+                audio = f[self.audio_col]
+                arr = np.asarray(audio["array"], dtype=np.float32)
+                sr = int(audio["sampling_rate"])
+                max_samps = int(self.max_input_seconds * sr)
+                if max_samps > 0 and len(arr) > max_samps:
+                    arr = arr[:max_samps]
+                feat = self.processor.feature_extractor(arr, sampling_rate=sr).input_features[0]
+                input_features.append({"input_features": feat})
         batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
         label_features = [{"input_ids": f["labels"]} for f in features]
         labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
@@ -483,59 +498,102 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     qc_dir = Path(out_dir) / "qc"
     chunk_long = bool(cfg.extra.get("chunk_long_audio", False))
+    chunk_max_s = float(cfg.extra.get("chunk_max_seconds", 28.0))
+    apply_qc = bool(cfg.extra.get("apply_data_qc", True))
+    min_cps = float(cfg.extra.get("min_chars_per_sec", 2.5))
+    max_cps = float(cfg.extra.get("max_chars_per_sec", 26.0))
+    filter_eval = bool(cfg.extra.get("filter_eval_outliers", False))
+    chunk_eval = chunk_long and bool(cfg.extra.get("chunk_long_audio_eval", True))
 
-    if bool(cfg.extra.get("apply_data_qc", True)):
-        from ndizi_asr.data_qc import audit_and_filter_hf_split
+    cache_slug = (
+        f"{'_'.join(h.replace('/', '__') for h in hub_ids)}"
+        f"__qc{int(apply_qc)}_cps{min_cps}-{max_cps}"
+        f"__chunk{int(chunk_long)}_{chunk_max_s}s_eval{int(chunk_eval)}"
+    )
+    cache_root = Path(cfg.extra.get("prepared_cache_dir") or (Path(cfg.output_dir) / "_cache" / cache_slug))
+    train_cache_dir = cache_root / "train"
+    eval_cache_dir = cache_root / "validation"
+    use_disk_cache = bool(cfg.extra.get("cache_chunked_dataset", True)) and not bool(
+        cfg.extra.get("rebuild_chunk_cache", False)
+    )
 
-        min_cps = float(cfg.extra.get("min_chars_per_sec", 2.5))
-        max_cps = float(cfg.extra.get("max_chars_per_sec", 26.0))
-        train_ds, _ = audit_and_filter_hf_split(
-            train_ds,
-            split_name="train",
-            audio_col=audio_col,
-            text_col=text_col,
-            max_duration_s=max_input_s,
-            min_chars_per_sec=min_cps,
-            max_chars_per_sec=max_cps,
-            chunk_long_audio=chunk_long,
-            apply_filter=True,
-            repair_glued_punctuation=True,
-            report_dir=qc_dir,
-        )
-        if eval_ds is not None:
-            eval_ds, _ = audit_and_filter_hf_split(
-                eval_ds,
-                split_name="validation",
+    loaded_from_cache = False
+    if use_disk_cache and train_cache_dir.exists() and (eval_ds is None or eval_cache_dir.exists()):
+        try:
+            logger.info("Loading cached QC+chunked dataset from %s", cache_root)
+            train_ds = load_from_disk(str(train_cache_dir))
+            if eval_ds is not None and eval_cache_dir.exists():
+                eval_ds = load_from_disk(str(eval_cache_dir))
+            loaded_from_cache = True
+            logger.info(
+                "Loaded cached splits in <1s: n_train=%d n_eval=%d",
+                len(train_ds),
+                len(eval_ds) if eval_ds is not None else 0,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not load cached dataset from %s (%s); rebuilding", cache_root, exc)
+            loaded_from_cache = False
+
+    if not loaded_from_cache:
+        if apply_qc:
+            from ndizi_asr.data_qc import audit_and_filter_hf_split
+
+            train_ds, _ = audit_and_filter_hf_split(
+                train_ds,
+                split_name="train",
                 audio_col=audio_col,
                 text_col=text_col,
                 max_duration_s=max_input_s,
                 min_chars_per_sec=min_cps,
                 max_chars_per_sec=max_cps,
-                chunk_long_audio=chunk_long and bool(cfg.extra.get("chunk_long_audio_eval", True)),
-                apply_filter=bool(cfg.extra.get("filter_eval_outliers", False)),
+                chunk_long_audio=chunk_long,
+                apply_filter=True,
                 repair_glued_punctuation=True,
                 report_dir=qc_dir,
             )
+            if eval_ds is not None:
+                eval_ds, _ = audit_and_filter_hf_split(
+                    eval_ds,
+                    split_name="validation",
+                    audio_col=audio_col,
+                    text_col=text_col,
+                    max_duration_s=max_input_s,
+                    min_chars_per_sec=min_cps,
+                    max_chars_per_sec=max_cps,
+                    chunk_long_audio=chunk_eval,
+                    apply_filter=filter_eval,
+                    repair_glued_punctuation=True,
+                    report_dir=qc_dir,
+                )
 
-    if chunk_long:
-        from .long_audio_chunker import expand_long_audio_dataset
+        if chunk_long:
+            from .long_audio_chunker import expand_long_audio_dataset
 
-        chunk_max_s = float(cfg.extra.get("chunk_max_seconds", 28.0))
-        train_ds = expand_long_audio_dataset(
-            train_ds,
-            audio_col=audio_col,
-            text_col=text_col,
-            max_chunk_seconds=chunk_max_s,
-            split_label="train",
-        )
-        if eval_ds is not None and bool(cfg.extra.get("chunk_long_audio_eval", True)):
-            eval_ds = expand_long_audio_dataset(
-                eval_ds,
+            train_ds = expand_long_audio_dataset(
+                train_ds,
                 audio_col=audio_col,
                 text_col=text_col,
                 max_chunk_seconds=chunk_max_s,
-                split_label="validation",
+                split_label="train",
             )
+            if eval_ds is not None and chunk_eval:
+                eval_ds = expand_long_audio_dataset(
+                    eval_ds,
+                    audio_col=audio_col,
+                    text_col=text_col,
+                    max_chunk_seconds=chunk_max_s,
+                    split_label="validation",
+                )
+
+        if bool(cfg.extra.get("cache_chunked_dataset", True)):
+            try:
+                cache_root.mkdir(parents=True, exist_ok=True)
+                train_ds.save_to_disk(str(train_cache_dir))
+                if eval_ds is not None:
+                    eval_ds.save_to_disk(str(eval_cache_dir))
+                logger.info("Saved QC+chunked dataset cache to %s", cache_root)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Could not save chunked dataset cache to %s: %s", cache_root, exc)
 
     token = _hf_token()
     load_kw: Dict[str, Any] = {}
@@ -571,40 +629,97 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
     from ndizi_asr.metrics import clean_glued_punctuation
 
     canon_targets = bool(cfg.extra.get("canonicalize_train_text", False))
+    on_the_fly_features = bool(cfg.extra.get("on_the_fly_features", True))
 
-    def prepare(batch: dict) -> dict:
-        audio = batch[audio_col]
-        arr = np.asarray(audio["array"], dtype=np.float32)
-        sr = int(audio["sampling_rate"])
-        dur = len(arr) / max(sr, 1)
-        raw_txt = str(batch.get(text_col) or "")
-        clean_txt = (
-            clean_swahili_training_target(raw_txt)
-            if canon_targets
-            else clean_glued_punctuation(raw_txt)
+    if on_the_fly_features:
+        # Fast text-only label tokenization: does not decode audio or serialize 14GB of
+        # (128, 3000) float32 spectrograms into Arrow. Audio features are extracted on the
+        # fly per mini-batch inside DataCollatorSpeechSeq2SeqWithPadding.
+        def _tokenize_batch(batch: dict) -> dict:
+            raw_list = batch.get(text_col) or []
+            labels_list: List[List[int]] = []
+            keep_list: List[bool] = []
+            for raw_txt in raw_list:
+                s = str(raw_txt or "")
+                clean_txt = (
+                    clean_swahili_training_target(s)
+                    if canon_targets
+                    else clean_glued_punctuation(s)
+                )
+                if not clean_txt:
+                    labels_list.append([])
+                    keep_list.append(False)
+                else:
+                    ids = processor.tokenizer(
+                        clean_txt,
+                        truncation=True,
+                        max_length=label_max,
+                    ).input_ids
+                    labels_list.append(ids)
+                    keep_list.append(len(ids) > 0)
+            return {"labels": labels_list, "_keep": keep_list}
+
+        drop_train_cols = [c for c in train_ds.column_names if c != audio_col]
+        logger.info("Tokenizing %d train labels (on-the-fly audio feature extraction enabled)", len(train_ds))
+        train_ds = (
+            train_ds.map(
+                _tokenize_batch,
+                batched=True,
+                batch_size=256,
+                remove_columns=drop_train_cols,
+                desc="tokenize_train_labels",
+            )
+            .filter(lambda b: b["_keep"], batched=True, batch_size=512, desc="filter_train_labels")
+            .remove_columns(["_keep"])
         )
-        batch["_drop"] = dur > max_input_s or not clean_txt
-        batch["input_features"] = processor.feature_extractor(arr, sampling_rate=sr).input_features[0]
-        batch["labels"] = processor.tokenizer(
-            clean_txt,
-            truncation=True,
-            max_length=label_max,
-        ).input_ids
-        return batch
+        if eval_ds is not None:
+            drop_eval_cols = [c for c in eval_ds.column_names if c != audio_col]
+            logger.info("Tokenizing %d eval labels", len(eval_ds))
+            eval_ds = (
+                eval_ds.map(
+                    _tokenize_batch,
+                    batched=True,
+                    batch_size=256,
+                    remove_columns=drop_eval_cols,
+                    desc="tokenize_eval_labels",
+                )
+                .filter(lambda b: b["_keep"], batched=True, batch_size=512, desc="filter_eval_labels")
+                .remove_columns(["_keep"])
+            )
+    else:
+        def prepare(batch: dict) -> dict:
+            audio = batch[audio_col]
+            arr = np.asarray(audio["array"], dtype=np.float32)
+            sr = int(audio["sampling_rate"])
+            dur = len(arr) / max(sr, 1)
+            raw_txt = str(batch.get(text_col) or "")
+            clean_txt = (
+                clean_swahili_training_target(raw_txt)
+                if canon_targets
+                else clean_glued_punctuation(raw_txt)
+            )
+            batch["_drop"] = dur > max_input_s or not clean_txt
+            batch["input_features"] = processor.feature_extractor(arr, sampling_rate=sr).input_features[0]
+            batch["labels"] = processor.tokenizer(
+                clean_txt,
+                truncation=True,
+                max_length=label_max,
+            ).input_ids
+            return batch
 
-    cols = list(train_ds.column_names)
-    train_ds = (
-        train_ds.map(prepare, remove_columns=cols, num_proc=1)
-        .filter(lambda x: not x["_drop"])
-        .remove_columns(["_drop"])
-    )
-    if eval_ds is not None:
-        ecols = list(eval_ds.column_names)
-        eval_ds = (
-            eval_ds.map(prepare, remove_columns=ecols, num_proc=1)
+        cols = list(train_ds.column_names)
+        train_ds = (
+            train_ds.map(prepare, remove_columns=cols, num_proc=1, writer_batch_size=64)
             .filter(lambda x: not x["_drop"])
             .remove_columns(["_drop"])
         )
+        if eval_ds is not None:
+            ecols = list(eval_ds.column_names)
+            eval_ds = (
+                eval_ds.map(prepare, remove_columns=ecols, num_proc=1, writer_batch_size=64)
+                .filter(lambda x: not x["_drop"])
+                .remove_columns(["_drop"])
+            )
 
     try:
         model = WhisperForConditionalGeneration.from_pretrained(cfg.model_id, **load_kw)
@@ -703,7 +818,7 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         metric_for_best_model="wer" if eval_ds is not None else None,
         greater_is_better=False if eval_ds is not None else None,
         save_total_limit=int(cfg.extra.get("save_total_limit", 2)),
-        dataloader_num_workers=int(cfg.extra.get("dataloader_num_workers", 2)),
+        dataloader_num_workers=int(cfg.extra.get("dataloader_num_workers", 0)),
     )
 
     trainer_kwargs: Dict[str, Any] = dict(
@@ -711,7 +826,11 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         model=model,
         train_dataset=train_ds,
         eval_dataset=eval_ds,
-        data_collator=DataCollatorSpeechSeq2SeqWithPadding(processor=processor),
+        data_collator=DataCollatorSpeechSeq2SeqWithPadding(
+            processor=processor,
+            audio_col=audio_col,
+            max_input_seconds=max_input_s,
+        ),
         compute_metrics=compute_metrics if eval_ds is not None else None,
     )
     # transformers API: processing_class (new) vs tokenizer (old)

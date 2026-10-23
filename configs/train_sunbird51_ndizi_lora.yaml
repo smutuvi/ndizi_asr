@@ -78,4 +78,7 @@ extra:
   gradient_checkpointing: true
   save_total_limit: 2
   per_device_eval_batch_size: 4
-  dataloader_num_workers: 2
+  # Keep 0: avoids Linux PyArrow/CUDA fork deadlock (futex_wait_queue_me) after MMS_FA chunking.
+  dataloader_num_workers: 0
+  on_the_fly_features: true
+  cache_chunked_dataset: true
