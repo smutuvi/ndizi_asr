@@ -18,7 +18,7 @@ from .ethio_normalize import (
 
 # Sentence/clause punctuation that should become a space when stripped (prevents
 # gluing words in references like "vizuri.ndio" or "aina B?nisichopenda").
-_SPACE_PUNCT_RE = re.compile(r"[.,?!;:()\[\]{}\"/\\—–…«»„“”።፣፤፥፦፧፨،؛؟\-]+")
+_SPACE_PUNCT_RE = re.compile(r"(?:‚ä¶|‚Ä¶|√â|â€¦|â€™|â€œ|â€|[.,?!;:()\[\]{}\"/\\—–…«»„“”።፣፤፥፦፧፨،؛؟\-])+")
 # Remaining punctuation (e.g. intra-word apostrophes in ng'ombe) removed cleanly
 _PUNCT_TABLE = str.maketrans("", "", string.punctuation + "’‘")
 

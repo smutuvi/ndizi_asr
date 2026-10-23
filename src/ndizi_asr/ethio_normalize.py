@@ -210,7 +210,7 @@ def clean_oromo_fair_transcription(text: str) -> str:
 #   3. Expressive vowel/nasal lengthening (labdaaa->labda, chaaa->cha, mmmh->mmh)
 #   4. Spoken backchannels/hesitations (mmh, eeh, aah, m) optionally stripped.
 
-_SWAHILI_MOJIBAKE_RE = re.compile(r"(‚ä¶|â€¦|â€™|â€œ|â€|\ufffd)")
+_SWAHILI_MOJIBAKE_RE = re.compile(r"(‚ä¶|‚Ä¶|√â|â€¦|â€™|â€œ|â€|\ufffd)", flags=re.IGNORECASE)
 _SWAHILI_TRIPLE_CHAR_RE = re.compile(r"(.)\1{2,}")
 _SWAHILI_BACKCHANNEL_RE = re.compile(
     r"\b(?:m+h+|h+m+|e+h+|a+h+|u+h+|o+h+|m{2,}|e{2,}|a{2,}|u{2,})\b"
@@ -400,22 +400,23 @@ def clean_swahili_fair_transcription(
     # Keep intra-word apostrophe in ng'ombe -> ngombe before punct->space
     t = _GLOTTAL_RE.sub("", t)
     t = _PLATFORM_PUNCT_RE.sub(" ", t)
-    # Collapse 3+ repeated letters from expressive elongation (labdaaa -> labda)
-    t = _SWAHILI_TRIPLE_CHAR_RE.sub(r"\1", t)
-    # Normalize compound words before token mapping
-    t = re.sub(r"\s+", " ", t).strip()
-    for pat, repl in _SWAHILI_COMPOUND_PATTERNS:
-        t = pat.sub(repl, t)
+    # Strip multi-letter backchannels (Eeee, Aaaaa, Mmmh) BEFORE collapsing 3+ repeated letters
     if drop_backchannels:
         t = _SWAHILI_BACKCHANNEL_RE.sub(" ", t)
     else:
         t = re.sub(r"\b(?:m+h+|h+m+|m{2,})\b", "mmh", t)
         t = re.sub(r"\b(?:e+h+|e{2,})\b", "eeh", t)
         t = re.sub(r"\b(?:a+h+|a{2,})\b", "aah", t)
+    # Collapse 3+ repeated letters from expressive elongation (labdaaa -> labda)
+    t = _SWAHILI_TRIPLE_CHAR_RE.sub(r"\1", t)
+    # Normalize compound words before token mapping
+    t = re.sub(r"\s+", " ", t).strip()
+    for pat, repl in _SWAHILI_COMPOUND_PATTERNS:
+        t = pat.sub(repl, t)
     tokens = []
     for tok in t.split():
-        # Strip stray single-letter 'm' hesitation tokens at clause boundaries
-        if drop_backchannels and tok in {"m", "hm", "mm", "eh", "ah", "uh", "oh"}:
+        # Strip stray single-letter hesitation tokens at clause boundaries (m, e, u, o)
+        if drop_backchannels and tok in {"m", "e", "u", "o", "hm", "mm", "eh", "ah", "uh", "oh"}:
             continue
         tokens.append(_SWAHILI_SPELLING_MAP.get(tok, tok))
     return " ".join(tokens)
