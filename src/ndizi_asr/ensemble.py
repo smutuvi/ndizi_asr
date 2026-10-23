@@ -717,6 +717,16 @@ def run_fusion(
                     },
                     list((choice0.get("message") or {}).keys()),
                 )
+            # Fallback to primary ASR hypothesis if LLM editor returned empty string
+            if not (fusion_text or "").strip():
+                hyps_map = rec.get("hypotheses") or {}
+                for m in asr_models:
+                    cand_h = str(hyps_map.get(m) or "").strip()
+                    if cand_h:
+                        fusion_text = cand_h
+                        fusion_error = None
+                        logger.info("Fell back to primary ASR (%s) for %s", m, sid)
+                        break
             row = {
                 "sample_id": sid,
                 "dataset_id": rec.get("dataset_id"),

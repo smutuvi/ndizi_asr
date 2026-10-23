@@ -365,6 +365,11 @@ def rescore_predictions_file(
     for idx, r in enumerate(rows):
         ref = str(r.get("reference") or "")
         hyp = str(r.get("prediction") if r.get("prediction") is not None else (r.get("hypothesis") or r.get("fusion") or ""))
+        if not hyp.strip() and isinstance(r.get("hypotheses"), dict):
+            for cand_h in r["hypotheses"].values():
+                if str(cand_h or "").strip():
+                    hyp = str(cand_h)
+                    break
         if not ref.strip():
             continue
         if _GLUED_PUNCT_RE.search(ref):
