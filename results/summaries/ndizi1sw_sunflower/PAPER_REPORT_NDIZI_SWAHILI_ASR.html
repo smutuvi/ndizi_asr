@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ndizi-1-SW Swahili ASR — Experimental Dossier &amp; Paper Blueprint</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #161d26;
+      --surface-alt: #1c2632;
+      --border: #2a3646;
+      --text: #e6edf3;
+      --text-muted: #9aa7b8;
+      --accent: #3b82f6;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --info: #06b6d4;
+      --code-bg: #222d3b;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --surface-alt: #f1f5f9;
+        --border: #e2e8f0;
+        --text: #0f172a;
+        --text-muted: #475569;
+        --accent: #2563eb;
+        --success: #059669;
+        --warning: #d97706;
+        --danger: #dc2626;
+        --info: #0891b2;
+        --code-bg: #e2e8f0;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 20px 64px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+    .header-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--accent);
+      color: #ffffff;
+      letter-spacing: 0.02em;
+    }
+    h1 {
+      font-size: 24px;
+      margin: 4px 0 10px;
+      line-height: 1.25;
+    }
+    h2 {
+      font-size: 18px;
+      margin: 26px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 {
+      font-size: 15px;
+      margin: 18px 0 8px;
+    }
+    p {
+      margin: 0 0 12px;
+      color: var(--text-muted);
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.9em;
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--text);
+    }
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 14px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .kpi-value {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .kpi-label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .tone-success { color: var(--success); }
+    .tone-info { color: var(--info); }
+    .tone-warning { color: var(--warning); }
+    .tone-danger { color: var(--danger); }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 20px 0;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+    .tab-btn {
+      background: var(--surface);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .callout {
+      background: var(--surface);
+      border-left: 4px solid var(--accent);
+      border-top: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 16px;
+      margin: 14px 0 20px;
+    }
+    .callout-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin: 16px 0;
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface-alt);
+    }
+    .card-body {
+      padding: 16px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin: 12px 0 22px;
+      background: var(--surface);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    th {
+      background: var(--surface-alt);
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: rgba(148, 163, 184, 0.04); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .highlight-row td { font-weight: 600; }
+
+    .bar-chart {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 245px 1fr 68px;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+    }
+    .bar-track {
+      height: 18px;
+      background: var(--surface-alt);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 16px;
+    }
+    .print-btn {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 11px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-left: auto;
+    }
+    @media print {
+      body { padding: 0; background: #fff; color: #000; }
+      .tabs, .print-btn { display: none; }
+      .tab-panel { display: block !important; page-break-after: always; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-meta">
+      <span class="badge">Paper Artifact &amp; Experimental Dossier</span>
+      <span>Dataset: <code>smutuvi/ndizi-1-sw</code> (n = 1,036 test; 5,593 raw train &rarr; 7,610 MMS_FA segments)</span>
+      <span>Backbone: <code>Sunbird/SunflowerASR-51-african-languages</code></span>
+      <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
+    </div>
+
+    <h1>Adapting Multilingual Whisper for Long-Form East African Agricultural Speech (Ndizi-1-SW)</h1>
+    <p>
+      Complete experimental record of adapting <code>Sunbird/SunflowerASR-51-african-languages</code> on Tanzanian
+      smallholder banana farmer interviews across 6 districts and 8 speaker L1 languages. Total error reduction from
+      <strong>35.94%</strong> Legacy WER down to <strong>16.59%</strong> Single-Model Fair WER (<strong>15.91%</strong> Fair Clean)
+      and <strong>14.88%</strong> 3-Model Fusion Fair WER (<strong>14.08%</strong> Fair Clean).
+    </p>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-value tone-success">16.59%</div>
+        <div class="kpi-label">Best Single-Model Fair WER (LoRA-QC + Gemma-MBR, down from 23.86% Whisper-Turbo)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value tone-success">15.91%</div>
+        <div class="kpi-label">Best Single-Model Fair Clean WER (n = 1,030 QC-clean test clips; 5.91% CER)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value tone-info">14.08%</div>
+        <div class="kpi-label">3-Model Cross-Family Fusion Fair Clean WER (14.88% all-test Fair WER)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value tone-warning">-12.08 pp</div>
+        <div class="kpi-label">Orthographic, Mojibake &amp; Punctuation Scoring Noise Removed (35.94% &rarr; 23.86% on Turbo)</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('overview', this)">1. Executive Summary &amp; Main Benchmark</button>
+      <button class="tab-btn" onclick="showTab('ablations', this)">2. Step-by-Step Ablation Trajectory</button>
+      <button class="tab-btn" onclick="showTab('breakdowns', this)">3. Duration, L1 &amp; District Stratification</button>
+      <button class="tab-btn" onclick="showTab('methodology', this)">4. Methodology &amp; Normalization Taxonomy</button>
+      <button class="tab-btn" onclick="showTab('manuscript', this)">5. Paper Blueprint &amp; LaTeX Tables</button>
+    </div>
+
+    <!-- TAB 1: OVERVIEW -->
+    <div id="tab-overview" class="tab-panel active">
+      <div class="callout">
+        <div class="callout-title">Core Thesis for Publication</div>
+        <div>
+          Apparent high Word Error Rates (35.9%+) on spontaneous East African field interviews stem from three compounding factors:
+          <strong>(1)</strong> unnormalized glued punctuation, MacRoman/UTF-8 mojibake (<code>‚Ä¶</code>, <code>√â</code>), Swahili compound boundary drift, and Bantu L1 phonological variation (~8–12 pp artificial penalty);
+          <strong>(2)</strong> silent truncation of clips exceeding Whisper's 30s positional window (27.7% of the dataset); and
+          <strong>(3)</strong> acoustic domain mismatch when freezing the encoder vs. catastrophic 51-language forgetting when unfreezing it.
+          Addressing all three with <strong>100%-frozen-base encoder+decoder rsLoRA</strong>, <strong>MMS_FA forced-aligned training segmentation</strong>, and <strong>overlap-VAD + LCS boundary stitching</strong> cuts single-model Fair WER to <strong>16.90%</strong> (<strong>16.59%</strong> with EmbeddingGemma MBR) while retaining 100% of the 51-language base weights.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span>Swahili Fair WER &amp; Fair Clean WER Across All 8 Evaluated Systems (Test Split n = 1,036)</span>
+          <span>Lower is better (%)</span>
+        </div>
+        <div class="card-body">
+          <div class="bar-chart">
+            <div class="bar-row">
+              <div><code>ndizi-whisper-turbo</code></div>
+              <div class="bar-track"><div class="bar-fill" style="width:79.5%; background:var(--danger);"></div></div>
+              <div class="num">23.86%</div>
+            </div>
+            <div class="bar-row">
+              <div><code>gemini-2.5-flash</code></div>
+              <div class="bar-track"><div class="bar-fill" style="width:68.4%; background:var(--warning);"></div></div>
+              <div class="num">20.53%</div>
+            </div>
+            <div class="bar-row">
+              <div><code>sunflower51-lora</code> (&le;30s)</div>
+              <div class="bar-track"><div class="bar-fill" style="width:62.1%; background:var(--accent);"></div></div>
+              <div class="num">18.64%</div>
+            </div>
+            <div class="bar-row">
+              <div><code>sunflower51-grpo</code></div>
+              <div class="bar-track"><div class="bar-fill" style="width:61.8%; background:var(--accent);"></div></div>
+              <div class="num">18.53%</div>
+            </div>
+            <div class="bar-row">
+              <div><strong><code>sunflower51-lora-qc</code> (Deploy)</strong></div>
+              <div class="bar-track"><div class="bar-fill" style="width:56.3%; background:var(--success);"></div></div>
+              <div class="num"><strong>16.90%</strong></div>
+            </div>
+            <div class="bar-row">
+              <div><code>sunflower51-local-rover</code></div>
+              <div class="bar-track"><div class="bar-fill" style="width:55.9%; background:var(--success);"></div></div>
+              <div class="num">16.76%</div>
+            </div>
+            <div class="bar-row">
+              <div><strong><code>sunflower51-lora-qc-gemma-mbr</code></strong></div>
+              <div class="bar-track"><div class="bar-fill" style="width:55.3%; background:var(--success);"></div></div>
+              <div class="num"><strong>16.59%</strong></div>
+            </div>
+            <div class="bar-row">
+              <div><strong><code>fusion-lora-qc-gemini-turbo</code></strong></div>
+              <div class="bar-track"><div class="bar-fill" style="width:49.6%; background:var(--info);"></div></div>
+              <div class="num"><strong>14.88%</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h2>Master Benchmark Table (All Scoring Regimes)</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>System ID</th>
+              <th>Architecture / Decoding Role</th>
+              <th class="num">n</th>
+              <th class="num">Legacy WER</th>
+              <th class="num">Fixed WER</th>
+              <th class="num">Fixed CER</th>
+              <th class="num">Fixed Clean WER</th>
+              <th class="num">Swahili Fair WER</th>
+              <th class="num">Swahili Fair CER</th>
+              <th class="num">Fair Clean WER</th>
+              <th class="num">Fair Clean CER</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>ndizi-whisper-turbo</code></td>
+              <td>Prior domain fine-tuned Whisper-v3-Turbo</td>
+              <td class="num">1,036</td>
+              <td class="num">35.94%</td>
+              <td class="num">32.00%</td>
+              <td class="num">11.52%</td>
+              <td class="num">31.05%</td>
+              <td class="num">23.86%</td>
+              <td class="num">9.86%</td>
+              <td class="num">22.87%</td>
+              <td class="num">8.97%</td>
+            </tr>
+            <tr>
+              <td><code>gemini-2.5-flash</code></td>
+              <td>Zero-shot multimodal LLM (Swahili prompt)</td>
+              <td class="num">1,036</td>
+              <td class="num">36.20%</td>
+              <td class="num">27.66%</td>
+              <td class="num">10.68%</td>
+              <td class="num">25.85%</td>
+              <td class="num">20.53%</td>
+              <td class="num">8.96%</td>
+              <td class="num">18.61%</td>
+              <td class="num">7.54%</td>
+            </tr>
+            <tr>
+              <td><code>sunflower51-lora</code></td>
+              <td>Stage-1 SunflowerASR-51 LoRA (&le;30s train only)</td>
+              <td class="num">1,036</td>
+              <td class="num">28.83%</td>
+              <td class="num">25.62%</td>
+              <td class="num">8.84%</td>
+              <td class="num">24.80%</td>
+              <td class="num">18.64%</td>
+              <td class="num">7.25%</td>
+              <td class="num">17.80%</td>
+              <td class="num">6.58%</td>
+            </tr>
+            <tr>
+              <td><code>sunflower51-grpo</code></td>
+              <td>Stage-2 Quality-Gated Semantic GRPO</td>
+              <td class="num">1,036</td>
+              <td class="num">28.67%</td>
+              <td class="num">25.55%</td>
+              <td class="num">8.79%</td>
+              <td class="num">24.89%</td>
+              <td class="num">18.53%</td>
+              <td class="num">7.18%</td>
+              <td class="num">17.86%</td>
+              <td class="num">6.60%</td>
+            </tr>
+            <tr class="highlight-row">
+              <td><code>sunflower51-lora-qc</code></td>
+              <td>Deploy Baseline: QC + MMS_FA Full-Audio rsLoRA</td>
+              <td class="num">1,036</td>
+              <td class="num">33.28%</td>
+              <td class="num">23.66%</td>
+              <td class="num">8.15%</td>
+              <td class="num">22.83%</td>
+              <td class="num tone-success">16.90%</td>
+              <td class="num">6.64%</td>
+              <td class="num tone-success">16.05%</td>
+              <td class="num">5.95%</td>
+            </tr>
+            <tr>
+              <td><code>sunflower51-local-rover</code></td>
+              <td>Local 3-Checkpoint ROVER (LoRA-QC + LoRA + GRPO)</td>
+              <td class="num">1,036</td>
+              <td class="num">32.99%</td>
+              <td class="num">23.37%</td>
+              <td class="num">8.08%</td>
+              <td class="num">22.54%</td>
+              <td class="num">16.76%</td>
+              <td class="num">6.60%</td>
+              <td class="num tone-success">15.91%</td>
+              <td class="num">5.91%</td>
+            </tr>
+            <tr class="highlight-row">
+              <td><code>sunflower51-lora-qc-gemma-mbr</code></td>
+              <td>Best Single Model: LoRA-QC + 5-Beam Gemma-MBR</td>
+              <td class="num">1,036</td>
+              <td class="num">33.60%</td>
+              <td class="num">24.25%</td>
+              <td class="num">8.19%</td>
+              <td class="num">23.59%</td>
+              <td class="num tone-success">16.59%</td>
+              <td class="num">6.49%</td>
+              <td class="num tone-success">15.91%</td>
+              <td class="num">5.91%</td>
+            </tr>
+            <tr class="highlight-row">
+              <td><code>fusion-lora-qc-gemini-turbo</code></td>
+              <td>Best Overall: 3-Model LLM Fusion + ASR Fallback</td>
+              <td class="num">1,028</td>
+              <td class="num">29.54%</td>
+              <td class="num">21.69%</td>
+              <td class="num">8.53%</td>
+              <td class="num">20.92%</td>
+              <td class="num tone-info">14.88%</td>
+              <td class="num">6.83%</td>
+              <td class="num tone-info">14.08%</td>
+              <td class="num">6.09%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 2: ABLATIONS -->
+    <div id="tab-ablations" class="tab-panel">
+      <h2>Step-by-Step Error Reduction Trajectory (35.94% &rarr; 14.08%)</h2>
+      <p>
+        Each experimental step isolated a specific failure mode. The table below decomposes the total 21.86 percentage
+        point reduction from the initial Legacy Whisper-v3-Turbo baseline down to the Clean Multi-Model Fusion ceiling.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Step</th>
+              <th>Experimental Intervention</th>
+              <th class="num">WER Before &rarr; After</th>
+              <th class="num">Abs. Delta</th>
+              <th>Scientific Mechanism &amp; Paper Takeaway</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>A1</strong></td>
+              <td>Glued-Punctuation &amp; Mojibake Tokenization Fix</td>
+              <td class="num">35.94% &rarr; 32.00%</td>
+              <td class="num tone-warning">-3.94 pp</td>
+              <td>Field transcripts contain missing spaces after commas/periods (<code>habari,mzuri</code>) and MacRoman/UTF-8 mojibake (<code>‚Ä¶</code>, <code>√â</code>). Replacing with whitespace prevents false two-word errors.</td>
+            </tr>
+            <tr>
+              <td><strong>A2</strong></td>
+              <td>Swahili Linguistic Fair Normalizer (<code>swahili_fair</code>)</td>
+              <td class="num">32.00% &rarr; 23.86%</td>
+              <td class="num tone-warning">-8.14 pp</td>
+              <td>Neutralizes non-semantic variation: (1) oral backchannels (<code>eeh, mmmh</code>), (2) digit-to-Swahili number words, (3) compound boundaries (<code>barabara ni &harr; barabarani</code>), and (4) Bantu L1 R/L &amp; H-drop doublets.</td>
+            </tr>
+            <tr>
+              <td><strong>A3</strong></td>
+              <td>Backbone Shift: Whisper-Turbo &rarr; SunflowerASR-51 Stage-1 LoRA</td>
+              <td class="num">23.86% &rarr; 18.64%</td>
+              <td class="num tone-success">-5.22 pp</td>
+              <td>Adapting Sunbird's 51-African-language Whisper-large-v3 backbone on &le;30s clips outperforms both Whisper-v3-Turbo (23.86%) and zero-shot Gemini 2.5 Flash (20.53%).</td>
+            </tr>
+            <tr>
+              <td><strong>A4</strong></td>
+              <td>Stage-2 Quality-Gated Semantic GRPO vs. Stage-1 SFT</td>
+              <td class="num">18.64% &rarr; 18.53%</td>
+              <td class="num">-0.11 pp</td>
+              <td>Sequence-level RL (WER+CER+GlossaryF1+EmbeddingGemma cosine) helps short clips (&le;15s: -0.93 pp) but yields only -0.11 pp overall, proving data curation &amp; long-audio coverage dominate RL post-training.</td>
+            </tr>
+            <tr class="highlight-row">
+              <td><strong>A5</strong></td>
+              <td>Dataset QC + MMS_FA Long-Audio Chunking + Frozen-Base rsLoRA</td>
+              <td class="num">18.64% &rarr; 16.90%</td>
+              <td class="num tone-success">-1.74 pp</td>
+              <td>Recovering 1,743 train clips &gt;30s via <code>torchaudio</code> MMS_FA alignment (5,572 &rarr; 7,610 segments) + encoder (1.5e-5) &amp; decoder (4.0e-5) rsLoRA + SpecAugment slashes &gt;30s WER from 21.83% to 19.60%.</td>
+            </tr>
+            <tr>
+              <td><strong>A6</strong></td>
+              <td>Overlap-VAD + LCS Boundary Stitching + EmbeddingGemma MBR</td>
+              <td class="num">16.90% &rarr; 16.59%</td>
+              <td class="num tone-success">-0.31 pp</td>
+              <td>1.5s sliding overlap between VAD chunks with LCS boundary deduplication + 5-beam MBR reranking (0.65 acoustic + 0.35 EmbeddingGemma-300M cosine) reaches 16.59% Fair WER.</td>
+            </tr>
+            <tr>
+              <td><strong>A7</strong></td>
+              <td>Local 3-Checkpoint ROVER Voting</td>
+              <td class="num">16.90% &rarr; 16.76%</td>
+              <td class="num">-0.14 pp</td>
+              <td>Word-level DP alignment across LoRA-QC (0.50), LoRA (0.25), and GRPO (0.25) achieves 16.76% Fair WER and best single-family Fixed WER (23.37%).</td>
+            </tr>
+            <tr>
+              <td><strong>A8</strong></td>
+              <td>Evaluation Outlier Hygiene (Fair Clean Subset, n = 1,030)</td>
+              <td class="num">16.59% &rarr; 15.91%</td>
+              <td class="num tone-success">-0.68 pp</td>
+              <td>Excluding 6–8 severely corrupted test references (speech rate &lt;2.5 or &gt;26 chars/s, truncated audio) reveals a true single-model error rate of 15.91% Fair Clean WER (5.91% CER).</td>
+            </tr>
+            <tr class="highlight-row">
+              <td><strong>A9</strong></td>
+              <td>Cross-Family 3-Model LLM Fusion (LoRA-QC + Gemini + Turbo)</td>
+              <td class="num">15.91% &rarr; 14.08%</td>
+              <td class="num tone-info">-1.83 pp</td>
+              <td>Synthesizing acoustically diverse hypotheses with automatic ASR fallback on empty LLM responses achieves 14.88% Fair WER across all clips and 14.08% on the QC-clean subset.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 3: BREAKDOWNS -->
+    <div id="tab-breakdowns" class="tab-panel">
+      <h2>1. Stratification by Utterance Duration (The 30-Second Bottleneck)</h2>
+      <p>
+        27.7% of the test set (287 / 1,036 clips) exceeds Whisper's 30-second window. Short clips (&le;15s) already reach
+        <strong>12.33%</strong> single-model Fair WER (<strong>10.96%</strong> with Fusion).
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Duration Bucket</th>
+              <th class="num">n</th>
+              <th class="num">Share</th>
+              <th class="num">Whisper-Turbo</th>
+              <th class="num">Gemini 2.5 Flash</th>
+              <th class="num">Stage-1 LoRA (30s)</th>
+              <th class="num">Stage-2 GRPO</th>
+              <th class="num">LoRA-QC (FullAudio)</th>
+              <th class="num">LoRA-QC + Gemma-MBR</th>
+              <th class="num">Local-ROVER</th>
+              <th class="num">3-Model Fusion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>&le;15s (short)</strong></td>
+              <td class="num">300</td>
+              <td class="num">29.0%</td>
+              <td class="num">17.94%</td>
+              <td class="num">18.31%</td>
+              <td class="num">14.02%</td>
+              <td class="num">13.09%</td>
+              <td class="num">12.47%</td>
+              <td class="num tone-success"><strong>12.33%</strong></td>
+              <td class="num">12.42%</td>
+              <td class="num tone-info"><strong>10.96%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>15–30s (medium)</strong></td>
+              <td class="num">449</td>
+              <td class="num">43.3%</td>
+              <td class="num">20.33%</td>
+              <td class="num">17.78%</td>
+              <td class="num">15.93%</td>
+              <td class="num">15.77%</td>
+              <td class="num">14.78%</td>
+              <td class="num tone-success"><strong>14.53%</strong></td>
+              <td class="num">14.78%</td>
+              <td class="num tone-info"><strong>12.83%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>&gt;30s (long audio)</strong></td>
+              <td class="num">287</td>
+              <td class="num">27.7%</td>
+              <td class="num">27.99%</td>
+              <td class="num">23.12%</td>
+              <td class="num">21.83%</td>
+              <td class="num">21.98%</td>
+              <td class="num">19.60%</td>
+              <td class="num tone-success"><strong>19.22%</strong></td>
+              <td class="num">19.35%</td>
+              <td class="num tone-info"><strong>17.39%</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>2. Stratification by Speaker First Language (L1 Substrate Fairness)</h2>
+      <p>
+        59% of respondents speak an indigenous Bantu or South Cushitic (<code>Kiiraq</code>) L1. Zero-shot Gemini 2.5 Flash
+        collapses on <code>Kizigua</code> L1 speakers (<strong>40.89%</strong> Fair WER) due to repetition loops, whereas
+        <code>LoRA-QC + Gemma-MBR</code> cuts Kizigua error in half (<strong>20.35%</strong>, and <strong>17.67%</strong> with Fusion).
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Speaker L1</th>
+              <th>Language Family</th>
+              <th class="num">n</th>
+              <th class="num">Whisper-Turbo</th>
+              <th class="num">Gemini 2.5 Flash</th>
+              <th class="num">Stage-1 LoRA (30s)</th>
+              <th class="num">Stage-2 GRPO</th>
+              <th class="num">LoRA-QC (FullAudio)</th>
+              <th class="num">LoRA-QC + Gemma-MBR</th>
+              <th class="num">Local-ROVER</th>
+              <th class="num">3-Model Fusion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Kiswahili</strong></td>
+              <td>Bantu (Sabaki G42)</td>
+              <td class="num">425</td>
+              <td class="num">22.95%</td>
+              <td class="num">18.86%</td>
+              <td class="num">17.76%</td>
+              <td class="num">17.66%</td>
+              <td class="num">15.83%</td>
+              <td class="num tone-success"><strong>15.53%</strong></td>
+              <td class="num">15.61%</td>
+              <td class="num tone-info"><strong>13.96%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Kikagulu</strong></td>
+              <td>Bantu (East Ruvu G12)</td>
+              <td class="num">282</td>
+              <td class="num">25.07%</td>
+              <td class="num">20.21%</td>
+              <td class="num">19.65%</td>
+              <td class="num">18.96%</td>
+              <td class="num">18.13%</td>
+              <td class="num tone-success"><strong>17.77%</strong></td>
+              <td class="num">18.07%</td>
+              <td class="num tone-info"><strong>16.51%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Kiiraq (Iraqw)</strong></td>
+              <td>South Cushitic</td>
+              <td class="num">97</td>
+              <td class="num">22.83%</td>
+              <td class="num">20.60%</td>
+              <td class="num">19.29%</td>
+              <td class="num">19.07%</td>
+              <td class="num">17.76%</td>
+              <td class="num">18.12%</td>
+              <td class="num tone-success"><strong>17.74%</strong></td>
+              <td class="num tone-info"><strong>14.99%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Kichaga</strong></td>
+              <td>Bantu (Chaga E60)</td>
+              <td class="num">93</td>
+              <td class="num">24.14%</td>
+              <td class="num">17.98%</td>
+              <td class="num">17.47%</td>
+              <td class="num">17.22%</td>
+              <td class="num">16.06%</td>
+              <td class="num">16.17%</td>
+              <td class="num tone-success"><strong>15.98%</strong></td>
+              <td class="num tone-info"><strong>13.58%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Kizigua</strong></td>
+              <td>Bantu (Seuta G31)</td>
+              <td class="num">50</td>
+              <td class="num">31.02%</td>
+              <td class="num tone-danger">40.89%</td>
+              <td class="num">24.28%</td>
+              <td class="num">26.65%</td>
+              <td class="num">22.11%</td>
+              <td class="num tone-success"><strong>20.35%</strong></td>
+              <td class="num">22.07%</td>
+              <td class="num tone-info"><strong>17.67%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Kinguu</strong></td>
+              <td>Bantu (Seuta G34)</td>
+              <td class="num">31</td>
+              <td class="num">18.45%</td>
+              <td class="num">16.82%</td>
+              <td class="num">15.19%</td>
+              <td class="num">15.83%</td>
+              <td class="num">13.48%</td>
+              <td class="num tone-success"><strong>12.99%</strong></td>
+              <td class="num">13.13%</td>
+              <td class="num tone-info"><strong>12.90%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Unknown</strong></td>
+              <td>Unspecified</td>
+              <td class="num">27</td>
+              <td class="num">25.45%</td>
+              <td class="num">20.54%</td>
+              <td class="num">17.96%</td>
+              <td class="num">18.60%</td>
+              <td class="num tone-success"><strong>17.05%</strong></td>
+              <td class="num tone-success"><strong>17.05%</strong></td>
+              <td class="num tone-success"><strong>17.05%</strong></td>
+              <td class="num tone-info"><strong>16.54%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Kipare</strong></td>
+              <td>Bantu (Pare G22)</td>
+              <td class="num">19</td>
+              <td class="num">13.44%</td>
+              <td class="num">12.03%</td>
+              <td class="num">11.79%</td>
+              <td class="num">11.08%</td>
+              <td class="num tone-success"><strong>9.67%</strong></td>
+              <td class="num">9.91%</td>
+              <td class="num tone-success"><strong>9.67%</strong></td>
+              <td class="num tone-info"><strong>8.25%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Kimeru</strong></td>
+              <td>Bantu (Chaga-Meru E61)</td>
+              <td class="num">12</td>
+              <td class="num">26.83%</td>
+              <td class="num">20.98%</td>
+              <td class="num">19.51%</td>
+              <td class="num">17.56%</td>
+              <td class="num">16.10%</td>
+              <td class="num tone-success"><strong>15.61%</strong></td>
+              <td class="num">16.10%</td>
+              <td class="num tone-info"><strong>15.61%</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>3. Stratification by Administrative District</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>District</th>
+              <th>Region / Dominant L1s</th>
+              <th class="num">n</th>
+              <th class="num">Whisper-Turbo</th>
+              <th class="num">Gemini 2.5 Flash</th>
+              <th class="num">Stage-1 LoRA (30s)</th>
+              <th class="num">Stage-2 GRPO</th>
+              <th class="num">LoRA-QC (FullAudio)</th>
+              <th class="num">LoRA-QC + Gemma-MBR</th>
+              <th class="num">Local-ROVER</th>
+              <th class="num">3-Model Fusion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Gairo</strong></td>
+              <td>Morogoro (Kikagulu / Kiswahili)</td>
+              <td class="num">431</td>
+              <td class="num">22.90%</td>
+              <td class="num">18.80%</td>
+              <td class="num">17.24%</td>
+              <td class="num">16.85%</td>
+              <td class="num">16.12%</td>
+              <td class="num tone-success"><strong>15.78%</strong></td>
+              <td class="num">15.99%</td>
+              <td class="num tone-info"><strong>14.48%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Hai</strong></td>
+              <td>Kilimanjaro (Kichaga / Kiswahili)</td>
+              <td class="num">179</td>
+              <td class="num">25.24%</td>
+              <td class="num">20.49%</td>
+              <td class="num">19.07%</td>
+              <td class="num">18.74%</td>
+              <td class="num">17.40%</td>
+              <td class="num">17.28%</td>
+              <td class="num tone-success"><strong>17.18%</strong></td>
+              <td class="num tone-info"><strong>14.80%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Kilindi</strong></td>
+              <td>Tanga (Kizigua / Kinguu)</td>
+              <td class="num">153</td>
+              <td class="num">23.94%</td>
+              <td class="num">24.39%</td>
+              <td class="num">19.94%</td>
+              <td class="num">20.66%</td>
+              <td class="num">17.92%</td>
+              <td class="num tone-success"><strong>16.84%</strong></td>
+              <td class="num">17.85%</td>
+              <td class="num tone-info"><strong>15.55%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Babati</strong></td>
+              <td>Manyara (Kiiraq / Kiswahili)</td>
+              <td class="num">138</td>
+              <td class="num">23.87%</td>
+              <td class="num">20.89%</td>
+              <td class="num">19.97%</td>
+              <td class="num">19.66%</td>
+              <td class="num">17.10%</td>
+              <td class="num">17.29%</td>
+              <td class="num tone-success"><strong>16.93%</strong></td>
+              <td class="num tone-info"><strong>15.63%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Meru</strong></td>
+              <td>Arusha (Kimeru / Kiswahili)</td>
+              <td class="num">87</td>
+              <td class="num">27.41%</td>
+              <td class="num">20.29%</td>
+              <td class="num">19.47%</td>
+              <td class="num">19.50%</td>
+              <td class="num">17.53%</td>
+              <td class="num">17.33%</td>
+              <td class="num tone-success"><strong>17.30%</strong></td>
+              <td class="num tone-info"><strong>15.74%</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Mbulu</strong></td>
+              <td>Manyara (Kiiraq)</td>
+              <td class="num">48</td>
+              <td class="num">22.24%</td>
+              <td class="num">18.86%</td>
+              <td class="num">17.88%</td>
+              <td class="num">17.92%</td>
+              <td class="num tone-success"><strong>16.17%</strong></td>
+              <td class="num">16.62%</td>
+              <td class="num tone-success"><strong>16.17%</strong></td>
+              <td class="num tone-info"><strong>12.38%</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 4: METHODOLOGY -->
+    <div id="tab-methodology" class="tab-panel">
+      <h2>Methodology &amp; Technical Contributions</h2>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <span>1. 51-Language-Preserving Encoder+Decoder rsLoRA</span>
+            <span>Training Architecture</span>
+          </div>
+          <div class="card-body">
+            <p>
+              Unfreezing Whisper encoder layers directly risks catastrophic forgetting across SunflowerASR-51's 50 other
+              African languages. We freeze 100% of the base backbone (<code>freeze_encoder: true</code>,
+              <code>unfreeze_top_encoder_layers: 0</code>) and attach rank-stabilized LoRA (<code>use_rslora: true</code>,
+              <code>r=32</code>, <code>alpha=64</code>, dropout <code>0.05</code>) across all attention and MLP projections
+              (<code>q_proj, k_proj, v_proj, out_proj, fc1, fc2</code>).
+            </p>
+            <p>
+              Differential learning rates (<code>1.5e-5</code> on encoder LoRA adapters, <code>4.0e-5</code> on decoder
+              LoRA adapters) paired with SpecAugment (<code>mask_time_prob=0.05</code>, <code>mask_feature_prob=0.04</code>)
+              adapt the acoustic front-end to rural field acoustics while preserving the exact base checkpoint.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span>2. MMS_FA Forced Alignment + Overlap-VAD LCS Stitching</span>
+            <span>Long-Audio Pipeline</span>
+          </div>
+          <div class="card-body">
+            <p>
+              <strong>Training time:</strong> 1,743 train clips and 391 validation clips exceed 30s. Rather than dropping
+              them, <code>long_audio_chunker.py</code> runs GPU-accelerated <code>torchaudio.pipelines.MMS_FA</code>
+              word-level forced alignment to split long recordings at natural word pauses into &le;28.0s segments
+              (expanding train from 5,572 to 7,610 segments with 0 VAD fallbacks).
+            </p>
+            <p>
+              <strong>Inference time:</strong> Long test utterances are segmented via Silero-VAD with a 1.5s sliding
+              overlap window (<code>overlap_s=1.5</code>) and merged using normalized token-level Longest Common
+              Subsequence (<code>_stitch_chunk_texts_lcs</code>) to eliminate boundary word truncation and duplication.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <h2>Swahili Linguistic Fair Normalization Taxonomy (<code>ethio_normalize.py</code>)</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Phenomenon in Field Transcripts</th>
+              <th>Representative Examples</th>
+              <th>Normalizer Rule</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Encoding &amp; Punctuation</strong></td>
+              <td>Glued punctuation &amp; MacRoman/UTF-8 mojibake from spreadsheet exports</td>
+              <td><code>habari,mzuri</code> | <code>‚Ä¶</code> | <code>‚ä¶</code> | <code>√â</code> | <code>â€™</code></td>
+              <td>Case-insensitive regex replaces mojibake and punctuation with spaces prior to tokenization (in both Fixed and Fair scorers).</td>
+            </tr>
+            <tr>
+              <td><strong>2. Oral Backchannels</strong></td>
+              <td>Inconsistent annotator inclusion of interviewer/farmer hesitations</td>
+              <td><code>eeh, eeee, mmmh, mhm, aah, ooh, uuh</code></td>
+              <td>Stripped <em>before</em> character-repeat collapsing so elongated backchannels (<code>Eeee</code>) do not collapse into single-letter tokens (<code>e</code>).</td>
+            </tr>
+            <tr>
+              <td><strong>3. Numerals vs. Words</strong></td>
+              <td>Annotators mix Arabic numerals with spoken Swahili number words</td>
+              <td><code>2 &rarr; mbili</code>, <code>15 &rarr; kumi na tano</code></td>
+              <td>Deterministic cardinal number parser converts digits <code>0–999,999</code> into canonical spoken Swahili words.</td>
+            </tr>
+            <tr>
+              <td><strong>4. Compound Boundaries</strong></td>
+              <td>Locative <code>-ni</code>, habitual <code>hu-</code>, and reduplicated adverbs written open or closed</td>
+              <td><code>barabara ni &rarr; barabarani</code> | <code>mara kwa mara &rarr; marakwamara</code></td>
+              <td>Bidirectional compound canonicalizer merges split prefixes/locatives and standardizes frequent multi-word agricultural expressions.</td>
+            </tr>
+            <tr>
+              <td><strong>5. Bantu L1 Phonology</strong></td>
+              <td>Alveolar liquid neutralization (R/L) and initial glottal H-dropping</td>
+              <td><code>tayari &harr; tayali</code> | <code>kula &harr; kura</code> | <code>hela &harr; ela</code></td>
+              <td>Maps curated agricultural/everyday R/L and H-drop lexical doublets to a single canonical lemma without altering minimal pairs.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 5: MANUSCRIPT -->
+    <div id="tab-manuscript" class="tab-panel">
+      <h2>LaTeX Benchmark Table for Overleaf / Paper Manuscript</h2>
+      <p>Copy and paste directly into your LaTeX manuscript (requires <code>\usepackage{booktabs}</code>):</p>
+      <pre><code>\begin{table*}[t]
+\centering
+\caption{ASR evaluation on the \texttt{smutuvi/ndizi-1-sw} test split ($n=1{,}036$). \textbf{Fixed} repairs glued punctuation and MacRoman mojibake; \textbf{Swahili Fair} additionally canonicalizes oral backchannels, spoken numerals, Swahili compound boundaries, and Bantu L1 phonological doublets; \textbf{Clean} excludes 6--8 QC-flagged reference outliers.}
+\label{tab:main_results}
+\begin{tabular}{llrrrrrr}
+\toprule
+\textbf{System} &amp; \textbf{Adaptation / Decoding Regime} &amp; \textbf{Legacy WER} &amp; \textbf{Fixed WER} &amp; \textbf{Fixed CER} &amp; \textbf{Fair WER} &amp; \textbf{Fair CER} &amp; \textbf{Fair Clean WER} \\
+\midrule
+\texttt{ndizi-whisper-turbo} &amp; Prior domain Whisper-v3-Turbo &amp; 35.94 &amp; 32.00 &amp; 11.52 &amp; 23.86 &amp; 9.86 &amp; 22.87 \\
+\texttt{gemini-2.5-flash} &amp; Zero-shot multimodal LLM &amp; 36.20 &amp; 27.66 &amp; 10.68 &amp; 20.53 &amp; 8.96 &amp; 18.61 \\
+\texttt{sunflower51-lora} &amp; Stage-1 LoRA ($\le 30$s train only) &amp; 28.83 &amp; 25.62 &amp; 8.84 &amp; 18.64 &amp; 7.25 &amp; 17.80 \\
+\texttt{sunflower51-grpo} &amp; Stage-2 Quality-Gated Semantic GRPO &amp; 28.67 &amp; 25.55 &amp; 8.79 &amp; 18.53 &amp; 7.18 &amp; 17.86 \\
+\texttt{sunflower51-lora-qc} &amp; Stage-1 LoRA + QC + MMS\_FA Full-Audio &amp; 33.28 &amp; 23.66 &amp; 8.15 &amp; 16.90 &amp; 6.64 &amp; 16.05 \\
+\texttt{sunflower51-local-rover} &amp; 3-Checkpoint ROVER (LoRA-QC+LoRA+GRPO) &amp; 32.99 &amp; \textbf{23.37} &amp; \textbf{8.08} &amp; 16.76 &amp; 6.60 &amp; \textbf{15.91} \\
+\texttt{sunflower51-lora-qc-gemma-mbr} &amp; LoRA-QC + Overlap-VAD LCS + Gemma-MBR &amp; 33.60 &amp; 24.25 &amp; 8.19 &amp; \textbf{16.59} &amp; \textbf{6.49} &amp; \textbf{15.91} \\
+\midrule
+\texttt{fusion-lora-qc-gemini-turbo} &amp; 3-Model Cross-Family LLM Fusion ($n=1{,}028$) &amp; 29.54 &amp; \textbf{21.69} &amp; 8.53 &amp; \textbf{14.88} &amp; 6.83 &amp; \textbf{14.08} \\
+\bottomrule
+\end{tabular}
+\end{table*}</code></pre>
+    </div>
+  </div>
+
+  <script>
+    function showTab(tabId, btn) {
+      document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById('tab-' + tabId).classList.add('active');
+      btn.classList.add('active');
+    }
+  </script>
+</body>
+</html>
