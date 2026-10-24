@@ -308,7 +308,7 @@ def apply_overrides(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, 
     if args.text_column:
         ds["text_column"] = args.text_column
     if args.max_samples is not None:
-        ds["max_samples"] = args.max_samples
+        ds["max_samples"] = args.max_samples if args.max_samples > 0 else None
     if args.streaming:
         ds["streaming"] = True
     if args.no_streaming:

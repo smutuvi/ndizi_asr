@@ -886,6 +886,10 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         merged_dir.mkdir(parents=True, exist_ok=True)
         logger.info("Saving merged standalone Whisper model to %s", merged_dir)
         merged_model = model.merge_and_unload()
+        if hasattr(merged_model, "generation_config") and merged_model.generation_config is not None:
+            merged_model.generation_config.forced_decoder_ids = None
+            merged_model.generation_config.language = None
+            merged_model.generation_config.task = None
         merged_model.save_pretrained(str(merged_dir))
         processor.save_pretrained(str(merged_dir))
 

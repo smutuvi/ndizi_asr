@@ -62,6 +62,7 @@ def _resolve_audio_path(raw: str, csv_dir: Path, data_root: Optional[Path]) -> P
         candidates.append(data_root / raw)
         candidates.append(data_root / p.name)
     candidates.append(csv_dir / raw)
+    candidates.append(csv_dir.parent / raw)
     candidates.append(csv_dir / p.name)
     for c in candidates:
         if c.is_file():
@@ -119,7 +120,7 @@ class CSVManifestLoader(BaseDatasetLoader):
                 sample_id = f"csv:{file_name}:{i}"
                 if skip_ids and sample_id in skip_ids:
                     count += 1
-                    if self.cfg.max_samples is not None and count >= self.cfg.max_samples:
+                    if self.cfg.max_samples and count >= self.cfg.max_samples:
                         break
                     continue
                 if skip_waveform:
@@ -147,7 +148,7 @@ class CSVManifestLoader(BaseDatasetLoader):
                     dataset_id=self.cfg.dataset_id or f"csv:{self.csv_path.name}",
                 )
                 count += 1
-                if self.cfg.max_samples is not None and count >= self.cfg.max_samples:
+                if self.cfg.max_samples and count >= self.cfg.max_samples:
                     break
 
 
@@ -265,7 +266,7 @@ class CropConceptLoader(BaseDatasetLoader):
                 dataset_id=self.cfg.dataset_id or "cropconcept",
             )
             count += 1
-            if self.cfg.max_samples is not None and count >= self.cfg.max_samples:
+            if self.cfg.max_samples and count >= self.cfg.max_samples:
                 break
 
         logger.info(

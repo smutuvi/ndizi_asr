@@ -454,11 +454,14 @@ class HuggingFaceWhisperClient:
         self.model.eval()
         self._sunbird = _is_sunbird_whisper(model_id)
         self._local_ft = _is_local_finetune(model_id)
+        if hasattr(self.model, "config") and self.model.config is not None:
+            self.model.config.forced_decoder_ids = None
         if hasattr(self.model, "generation_config") and self.model.generation_config is not None:
-            # Clear language/task on generation_config so explicit forced_decoder_ids
-            # in .generate() does not double-prepend prefix tokens in transformers 5.x.
+            # Clear language/task/forced_decoder_ids on generation_config so explicit
+            # forced_decoder_ids in .generate() always uses the requested eval language.
             self.model.generation_config.language = None
             self.model.generation_config.task = None
+            self.model.generation_config.forced_decoder_ids = None
         self._transcribe_tok = self.processor.tokenizer.convert_tokens_to_ids("<|transcribe|>")
         self._notimestamps_tok = self.processor.tokenizer.convert_tokens_to_ids("<|notimestamps|>")
         if self.gemma_mbr or self.rag_prompt:
@@ -540,10 +543,13 @@ class HuggingFaceWhisperClient:
     ) -> str:
         torch = self.torch
         # Match whisper_trainer.py feature extraction (do_normalize=False by default)
-        # on local/Ndizi fine-tunes; keep do_normalize=True for zero-shot Sunbird hub models.
+        # on Swahili local/Ndizi fine-tunes; use do_normalize=True for non-Swahili
+        # languages and zero-shot Sunbird hub models so out-of-domain African languages
+        # receive standard normalized log-Mel spectrograms.
+        is_swahili_tok = any(tok_id == 50318 for _, tok_id in (forced_decoder_ids or []))
         do_norm = (
             bool(getattr(self.processor.feature_extractor, "do_normalize", False))
-            if self._local_ft
+            if (self._local_ft and is_swahili_tok)
             else True
         )
         inputs = self.processor(
