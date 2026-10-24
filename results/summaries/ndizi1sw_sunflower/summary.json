@@ -10,10 +10,10 @@
       "wer_clean_subset": 0.3105,
       "cer_clean_subset": 0.1063,
       "n_clean": 1027,
-      "wer_swahili_fair": 0.2386,
-      "cer_swahili_fair": 0.0986,
-      "wer_swahili_fair_clean": 0.2287,
-      "cer_swahili_fair_clean": 0.0897
+      "wer_swahili_fair": 0.2166,
+      "cer_swahili_fair": 0.0955,
+      "wer_swahili_fair_clean": 0.2064,
+      "cer_swahili_fair_clean": 0.0865
     },
     {
       "system": "gemini-2.5-flash",
@@ -24,10 +24,10 @@
       "wer_clean_subset": 0.2585,
       "cer_clean_subset": 0.0929,
       "n_clean": 1027,
-      "wer_swahili_fair": 0.2053,
-      "cer_swahili_fair": 0.0896,
-      "wer_swahili_fair_clean": 0.1861,
-      "cer_swahili_fair_clean": 0.0754
+      "wer_swahili_fair": 0.1909,
+      "cer_swahili_fair": 0.0867,
+      "wer_swahili_fair_clean": 0.1715,
+      "cer_swahili_fair_clean": 0.0725
     },
     {
       "system": "sunflower51-lora",
@@ -38,10 +38,10 @@
       "wer_clean_subset": 0.248,
       "cer_clean_subset": 0.0814,
       "n_clean": 1029,
-      "wer_swahili_fair": 0.1864,
-      "cer_swahili_fair": 0.0725,
-      "wer_swahili_fair_clean": 0.178,
-      "cer_swahili_fair_clean": 0.0658
+      "wer_swahili_fair": 0.1698,
+      "cer_swahili_fair": 0.0696,
+      "wer_swahili_fair_clean": 0.1613,
+      "cer_swahili_fair_clean": 0.0628
     },
     {
       "system": "sunflower51-grpo",
@@ -52,10 +52,10 @@
       "wer_clean_subset": 0.2489,
       "cer_clean_subset": 0.082,
       "n_clean": 1030,
-      "wer_swahili_fair": 0.1853,
-      "cer_swahili_fair": 0.0718,
-      "wer_swahili_fair_clean": 0.1786,
-      "cer_swahili_fair_clean": 0.066
+      "wer_swahili_fair": 0.1689,
+      "cer_swahili_fair": 0.0688,
+      "wer_swahili_fair_clean": 0.1621,
+      "cer_swahili_fair_clean": 0.063
     },
     {
       "system": "sunflower51-lora-qc",
@@ -66,10 +66,10 @@
       "wer_clean_subset": 0.2283,
       "cer_clean_subset": 0.0744,
       "n_clean": 1028,
-      "wer_swahili_fair": 0.169,
-      "cer_swahili_fair": 0.0664,
-      "wer_swahili_fair_clean": 0.1605,
-      "cer_swahili_fair_clean": 0.0595
+      "wer_swahili_fair": 0.153,
+      "cer_swahili_fair": 0.0635,
+      "wer_swahili_fair_clean": 0.1445,
+      "cer_swahili_fair_clean": 0.0566
     },
     {
       "system": "sunflower51-lora-qc-v2",
@@ -80,10 +80,10 @@
       "wer_clean_subset": 0.2336,
       "cer_clean_subset": 0.0749,
       "n_clean": 1029,
-      "wer_swahili_fair": 0.1633,
-      "cer_swahili_fair": 0.064,
-      "wer_swahili_fair_clean": 0.1556,
-      "cer_swahili_fair_clean": 0.0575
+      "wer_swahili_fair": 0.146,
+      "cer_swahili_fair": 0.061,
+      "wer_swahili_fair_clean": 0.1382,
+      "cer_swahili_fair_clean": 0.0546
     },
     {
       "system": "sunflower51-lora-qc-gemma-mbr",
@@ -94,10 +94,10 @@
       "wer_clean_subset": 0.2359,
       "cer_clean_subset": 0.0762,
       "n_clean": 1030,
-      "wer_swahili_fair": 0.1659,
-      "cer_swahili_fair": 0.0649,
-      "wer_swahili_fair_clean": 0.1591,
-      "cer_swahili_fair_clean": 0.0591
+      "wer_swahili_fair": 0.1498,
+      "cer_swahili_fair": 0.062,
+      "wer_swahili_fair_clean": 0.1428,
+      "cer_swahili_fair_clean": 0.0562
     },
     {
       "system": "sunflower51-local-rover",
@@ -108,24 +108,24 @@
       "wer_clean_subset": 0.2254,
       "cer_clean_subset": 0.0738,
       "n_clean": 1028,
-      "wer_swahili_fair": 0.1676,
-      "cer_swahili_fair": 0.066,
-      "wer_swahili_fair_clean": 0.1591,
-      "cer_swahili_fair_clean": 0.0591
+      "wer_swahili_fair": 0.1519,
+      "cer_swahili_fair": 0.0632,
+      "wer_swahili_fair_clean": 0.1433,
+      "cer_swahili_fair_clean": 0.0563
     },
     {
       "system": "fusion-lora-qc-gemini-turbo",
       "n_total": 1028,
-      "wer_legacy_glued": 0.2954,
-      "wer_fixed_punct": 0.2169,
-      "cer_fixed_punct": 0.0853,
-      "wer_clean_subset": 0.2092,
-      "cer_clean_subset": 0.0778,
-      "n_clean": 1021,
-      "wer_swahili_fair": 0.1488,
-      "cer_swahili_fair": 0.0683,
-      "wer_swahili_fair_clean": 0.1408,
-      "cer_swahili_fair_clean": 0.0609
+      "wer_legacy_glued": 0.2947,
+      "wer_fixed_punct": 0.2148,
+      "cer_fixed_punct": 0.0816,
+      "wer_clean_subset": 0.2084,
+      "cer_clean_subset": 0.076,
+      "n_clean": 1022,
+      "wer_swahili_fair": 0.1321,
+      "cer_swahili_fair": 0.062,
+      "wer_swahili_fair_clean": 0.1253,
+      "cer_swahili_fair_clean": 0.0563
     }
   ]
 }

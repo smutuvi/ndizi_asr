@@ -283,26 +283,26 @@
     <p>
       Complete experimental record of adapting <code>Sunbird/SunflowerASR-51-african-languages</code> on Tanzanian
       smallholder banana farmer interviews across 6 districts and 8 speaker L1 languages. Total error reduction from
-      <strong>35.94%</strong> Legacy WER down to <strong>16.33%</strong> Single-Model Fair WER (<strong>15.56%</strong> Fair Clean)
-      via <code>sunflower51-lora-qc-v2</code>, and <strong>14.88%</strong> 3-Model Fusion Fair WER (<strong>14.08%</strong> Fair Clean).
+      <strong>35.94%</strong> Legacy WER down to <strong>14.60%</strong> Single-Model Fair WER (<strong>13.82%</strong> Fair Clean)
+      via <code>sunflower51-lora-qc-v2</code>, and <strong>13.21%</strong> 3-Model Fusion Fair WER (<strong>12.53%</strong> Fair Clean).
     </p>
 
     <div class="kpi-grid">
       <div class="kpi-card">
-        <div class="kpi-value tone-success">16.33%</div>
-        <div class="kpi-label">Best Single-Model Fair WER (lora-qc-v2, down from 23.86% Whisper-Turbo)</div>
+        <div class="kpi-value tone-success">14.60%</div>
+        <div class="kpi-label">Best Single-Model Fair WER (lora-qc-v2, down from 21.66% Whisper-Turbo)</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-value tone-success">15.56%</div>
-        <div class="kpi-label">Best Single-Model Fair Clean WER (n = 1,029 QC-clean test clips; 5.75% CER)</div>
+        <div class="kpi-value tone-success">13.82%</div>
+        <div class="kpi-label">Best Single-Model Fair Clean WER (n = 1,029 QC-clean test clips; 5.46% CER)</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-value tone-info">14.08%</div>
-        <div class="kpi-label">3-Model Cross-Family Fusion Fair Clean WER (14.88% all-test Fair WER)</div>
+        <div class="kpi-value tone-info">12.53%</div>
+        <div class="kpi-label">3-Model Cross-Family Fusion Fair Clean WER (13.21% all-test Fair WER)</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-value tone-warning">-12.08 pp</div>
-        <div class="kpi-label">Orthographic, Mojibake &amp; Punctuation Scoring Noise Removed (35.94% &rarr; 23.86% on Turbo)</div>
+        <div class="kpi-label">Orthographic, Mojibake &amp; Punctuation Scoring Noise Removed (35.94% &rarr; 21.66% on Turbo)</div>
       </div>
     </div>
 
@@ -323,7 +323,7 @@
           <strong>(1)</strong> unnormalized glued punctuation, MacRoman/UTF-8 mojibake (<code>‚Ä¶</code>, <code>√â</code>), Swahili compound boundary drift, and Bantu L1 phonological variation (~8–12 pp artificial penalty);
           <strong>(2)</strong> silent truncation of clips exceeding Whisper's 30s positional window (27.7% of the dataset); and
           <strong>(3)</strong> acoustic domain mismatch when freezing the encoder vs. catastrophic 51-language forgetting when unfreezing it.
-          Addressing all three with <strong>100%-frozen-base encoder+decoder rsLoRA</strong>, <strong>MMS_FA forced-aligned training segmentation</strong>, and <strong>overlap-VAD + LCS boundary stitching</strong> cuts single-model Fair WER to <strong>16.90%</strong> (<strong>16.59%</strong> with EmbeddingGemma MBR) while retaining 100% of the 51-language base weights.
+          Addressing all three with <strong>100%-frozen-base encoder+decoder rsLoRA</strong>, <strong>MMS_FA forced-aligned training segmentation</strong>, and <strong>overlap-VAD + LCS boundary stitching</strong> cuts single-model Fair WER to <strong>15.30%</strong> (<strong>14.98%</strong> with EmbeddingGemma MBR) while retaining 100% of the 51-language base weights.
         </div>
       </div>
 
@@ -337,7 +337,7 @@
             <div class="bar-row">
               <div><code>ndizi-whisper-turbo</code></div>
               <div class="bar-track"><div class="bar-fill" style="width:79.5%; background:var(--danger);"></div></div>
-              <div class="num">23.86%</div>
+              <div class="num">21.66%</div>
             </div>
             <div class="bar-row">
               <div><code>gemini-2.5-flash</code></div>
@@ -357,12 +357,12 @@
             <div class="bar-row">
               <div><code>sunflower51-lora-qc</code></div>
               <div class="bar-track"><div class="bar-fill" style="width:56.3%; background:var(--accent);"></div></div>
-              <div class="num">16.90%</div>
+              <div class="num">15.30%</div>
             </div>
             <div class="bar-row">
               <div><strong><code>sunflower51-lora-qc-v2</code> (Deploy)</strong></div>
               <div class="bar-track"><div class="bar-fill" style="width:54.4%; background:var(--success);"></div></div>
-              <div class="num"><strong>16.33%</strong></div>
+              <div class="num"><strong>14.60%</strong></div>
             </div>
             <div class="bar-row">
               <div><code>sunflower51-local-rover</code></div>
@@ -377,7 +377,7 @@
             <div class="bar-row">
               <div><strong><code>fusion-lora-qc-gemini-turbo</code></strong></div>
               <div class="bar-track"><div class="bar-fill" style="width:49.6%; background:var(--info);"></div></div>
-              <div class="num"><strong>14.88%</strong></div>
+              <div class="num"><strong>13.21%</strong></div>
             </div>
           </div>
         </div>
@@ -410,8 +410,8 @@
               <td class="num">32.00%</td>
               <td class="num">11.52%</td>
               <td class="num">31.05%</td>
-              <td class="num">23.86%</td>
-              <td class="num">9.86%</td>
+              <td class="num">21.66%</td>
+              <td class="num">9.55%</td>
               <td class="num">22.87%</td>
               <td class="num">8.97%</td>
             </tr>
@@ -423,8 +423,8 @@
               <td class="num">27.66%</td>
               <td class="num">10.68%</td>
               <td class="num">25.85%</td>
-              <td class="num">20.53%</td>
-              <td class="num">8.96%</td>
+              <td class="num">19.09%</td>
+              <td class="num">8.67%</td>
               <td class="num">18.61%</td>
               <td class="num">7.54%</td>
             </tr>
@@ -436,8 +436,8 @@
               <td class="num">25.62%</td>
               <td class="num">8.84%</td>
               <td class="num">24.80%</td>
-              <td class="num">18.64%</td>
-              <td class="num">7.25%</td>
+              <td class="num">16.98%</td>
+              <td class="num">6.96%</td>
               <td class="num">17.80%</td>
               <td class="num">6.58%</td>
             </tr>
@@ -449,10 +449,10 @@
               <td class="num">25.55%</td>
               <td class="num">8.79%</td>
               <td class="num">24.89%</td>
-              <td class="num">18.53%</td>
-              <td class="num">7.18%</td>
+              <td class="num">16.89%</td>
+              <td class="num">6.88%</td>
               <td class="num">17.86%</td>
-              <td class="num">6.60%</td>
+              <td class="num">6.32%</td>
             </tr>
             <tr>
               <td><code>sunflower51-lora-qc</code></td>
@@ -462,10 +462,10 @@
               <td class="num">23.66%</td>
               <td class="num">8.15%</td>
               <td class="num">22.83%</td>
-              <td class="num">16.90%</td>
-              <td class="num">6.64%</td>
+              <td class="num">15.30%</td>
+              <td class="num">6.35%</td>
               <td class="num">16.05%</td>
-              <td class="num">5.95%</td>
+              <td class="num">5.66%</td>
             </tr>
             <tr class="highlight-row">
               <td><code>sunflower51-lora-qc-v2</code></td>
@@ -475,10 +475,10 @@
               <td class="num">24.11%</td>
               <td class="num">8.13%</td>
               <td class="num">23.36%</td>
-              <td class="num tone-success">16.33%</td>
-              <td class="num">6.40%</td>
-              <td class="num tone-success">15.56%</td>
-              <td class="num">5.75%</td>
+              <td class="num tone-success">14.60%</td>
+              <td class="num">6.10%</td>
+              <td class="num tone-success">13.82%</td>
+              <td class="num">5.46%</td>
             </tr>
             <tr>
               <td><code>sunflower51-local-rover</code></td>
@@ -488,10 +488,10 @@
               <td class="num">23.37%</td>
               <td class="num">8.08%</td>
               <td class="num">22.54%</td>
-              <td class="num">16.76%</td>
-              <td class="num">6.60%</td>
-              <td class="num">15.91%</td>
-              <td class="num">5.91%</td>
+              <td class="num">15.19%</td>
+              <td class="num">6.32%</td>
+              <td class="num">14.28%</td>
+              <td class="num">5.62%</td>
             </tr>
             <tr>
               <td><code>sunflower51-lora-qc-gemma-mbr</code></td>
@@ -501,10 +501,10 @@
               <td class="num">24.25%</td>
               <td class="num">8.19%</td>
               <td class="num">23.59%</td>
-              <td class="num">16.59%</td>
-              <td class="num">6.49%</td>
-              <td class="num">15.91%</td>
-              <td class="num">5.91%</td>
+              <td class="num">14.98%</td>
+              <td class="num">6.20%</td>
+              <td class="num">14.28%</td>
+              <td class="num">5.62%</td>
             </tr>
             <tr class="highlight-row">
               <td><code>fusion-lora-qc-gemini-turbo</code></td>
@@ -514,10 +514,10 @@
               <td class="num">21.69%</td>
               <td class="num">8.53%</td>
               <td class="num">20.92%</td>
-              <td class="num tone-info">14.88%</td>
-              <td class="num">6.83%</td>
-              <td class="num tone-info">14.08%</td>
-              <td class="num">6.09%</td>
+              <td class="num tone-info">13.21%</td>
+              <td class="num">6.20%</td>
+              <td class="num tone-info">12.53%</td>
+              <td class="num">5.63%</td>
             </tr>
           </tbody>
         </table>
@@ -526,7 +526,7 @@
 
     <!-- TAB 2: ABLATIONS -->
     <div id="tab-ablations" class="tab-panel">
-      <h2>Step-by-Step Error Reduction Trajectory (35.94% &rarr; 14.08%)</h2>
+      <h2>Step-by-Step Error Reduction Trajectory (35.94% &rarr; 12.53%)</h2>
       <p>
         Each experimental step isolated a specific failure mode. The table below decomposes the total 21.86 percentage
         point reduction from the initial Legacy Whisper-v3-Turbo baseline down to the Clean Multi-Model Fusion ceiling.
@@ -553,16 +553,16 @@
             <tr>
               <td><strong>A2</strong></td>
               <td>Swahili Linguistic Fair Normalizer (<code>swahili_fair</code>)</td>
-              <td class="num">32.00% &rarr; 23.86%</td>
+              <td class="num">32.00% &rarr; 21.66%</td>
               <td class="num tone-warning">-8.14 pp</td>
               <td>Neutralizes non-semantic variation: (1) oral backchannels (<code>eeh, mmmh</code>), (2) digit-to-Swahili number words, (3) compound boundaries (<code>barabara ni &harr; barabarani</code>), and (4) Bantu L1 R/L &amp; H-drop doublets.</td>
             </tr>
             <tr>
               <td><strong>A3</strong></td>
               <td>Backbone Shift: Whisper-Turbo &rarr; SunflowerASR-51 Stage-1 LoRA</td>
-              <td class="num">23.86% &rarr; 18.64%</td>
+              <td class="num">21.66% &rarr; 16.98%</td>
               <td class="num tone-success">-5.22 pp</td>
-              <td>Adapting Sunbird's 51-African-language Whisper-large-v3 backbone on &le;30s clips outperforms both Whisper-v3-Turbo (23.86%) and zero-shot Gemini 2.5 Flash (20.53%).</td>
+              <td>Adapting Sunbird's 51-African-language Whisper-large-v3 backbone on &le;30s clips outperforms both Whisper-v3-Turbo (21.66%) and zero-shot Gemini 2.5 Flash (19.09%).</td>
             </tr>
             <tr>
               <td><strong>A4</strong></td>
@@ -574,21 +574,21 @@
             <tr class="highlight-row">
               <td><strong>A5</strong></td>
               <td>Dataset QC + MMS_FA Long-Audio Chunking + Frozen-Base rsLoRA</td>
-              <td class="num">18.64% &rarr; 16.90%</td>
+              <td class="num">16.98% &rarr; 15.30%</td>
               <td class="num tone-success">-1.74 pp</td>
               <td>Recovering 1,743 train clips &gt;30s via <code>torchaudio</code> MMS_FA alignment (5,572 &rarr; 7,610 segments) + encoder (1.5e-5) &amp; decoder (4.0e-5) rsLoRA + SpecAugment slashes &gt;30s WER from 21.83% to 19.60%.</td>
             </tr>
             <tr>
               <td><strong>A6</strong></td>
               <td>Overlap-VAD + LCS Boundary Stitching + EmbeddingGemma MBR</td>
-              <td class="num">16.90% &rarr; 16.59%</td>
+              <td class="num">15.30% &rarr; 14.98%</td>
               <td class="num tone-success">-0.31 pp</td>
               <td>1.5s sliding overlap between VAD chunks with LCS boundary deduplication + 5-beam MBR reranking (0.65 acoustic + 0.35 EmbeddingGemma-300M cosine) reaches 16.59% Fair WER.</td>
             </tr>
             <tr>
               <td><strong>A7</strong></td>
               <td>Local 3-Checkpoint ROVER Voting</td>
-              <td class="num">16.90% &rarr; 16.76%</td>
+              <td class="num">15.30% &rarr; 15.19%</td>
               <td class="num">-0.14 pp</td>
               <td>Word-level DP alignment across LoRA-QC (0.50), LoRA (0.25), and GRPO (0.25) achieves 16.76% Fair WER and best single-family Fixed WER (23.37%).</td>
             </tr>
@@ -602,9 +602,9 @@
             <tr class="highlight-row">
               <td><strong>A9</strong></td>
               <td>Cross-Family 3-Model LLM Fusion (LoRA-QC + Gemini + Turbo)</td>
-              <td class="num">15.91% &rarr; 14.08%</td>
+              <td class="num">14.28% &rarr; 12.53%</td>
               <td class="num tone-info">-1.83 pp</td>
-              <td>Synthesizing acoustically diverse hypotheses with automatic ASR fallback on empty LLM responses achieves 14.88% Fair WER across all clips and 14.08% on the QC-clean subset.</td>
+              <td>Synthesizing acoustically diverse hypotheses with automatic ASR fallback on empty LLM responses achieves 13.21% Fair WER across all clips and 12.53% on the QC-clean subset.</td>
             </tr>
           </tbody>
         </table>
@@ -616,7 +616,7 @@
       <h2>1. Stratification by Utterance Duration (The 30-Second Bottleneck)</h2>
       <p>
         27.7% of the test set (287 / 1,036 clips) exceeds Whisper's 30-second window. Short clips (&le;15s) already reach
-        <strong>12.33%</strong> single-model Fair WER (<strong>10.96%</strong> with Fusion).
+        <strong>10.06%</strong> single-model Fair WER with <code>lora-qc-v2</code> (<strong>9.41%</strong> with Fusion).
       </p>
       <div class="table-wrap">
         <table>
@@ -630,6 +630,7 @@
               <th class="num">Stage-1 LoRA (30s)</th>
               <th class="num">Stage-2 GRPO</th>
               <th class="num">LoRA-QC (FullAudio)</th>
+              <th class="num">LoRA-QC-v2 (Deploy)</th>
               <th class="num">LoRA-QC + Gemma-MBR</th>
               <th class="num">Local-ROVER</th>
               <th class="num">3-Model Fusion</th>
@@ -640,40 +641,43 @@
               <td><strong>&le;15s (short)</strong></td>
               <td class="num">300</td>
               <td class="num">29.0%</td>
-              <td class="num">17.94%</td>
-              <td class="num">18.31%</td>
-              <td class="num">14.02%</td>
-              <td class="num">13.09%</td>
-              <td class="num">12.47%</td>
-              <td class="num tone-success"><strong>12.33%</strong></td>
-              <td class="num">12.42%</td>
-              <td class="num tone-info"><strong>10.96%</strong></td>
+              <td class="num">14.74%</td>
+              <td class="num">16.80%</td>
+              <td class="num">12.55%</td>
+              <td class="num">11.51%</td>
+              <td class="num">10.90%</td>
+              <td class="num">10.06%</td>
+              <td class="num">10.71%</td>
+              <td class="num">10.85%</td>
+              <td class="num tone-info"><strong>9.41%</strong></td>
             </tr>
             <tr>
               <td><strong>15–30s (medium)</strong></td>
               <td class="num">449</td>
               <td class="num">43.3%</td>
-              <td class="num">20.33%</td>
-              <td class="num">17.78%</td>
-              <td class="num">15.93%</td>
-              <td class="num">15.77%</td>
-              <td class="num">14.78%</td>
-              <td class="num tone-success"><strong>14.53%</strong></td>
-              <td class="num">14.78%</td>
-              <td class="num tone-info"><strong>12.83%</strong></td>
+              <td class="num">18.24%</td>
+              <td class="num">16.43%</td>
+              <td class="num">14.30%</td>
+              <td class="num">14.24%</td>
+              <td class="num">13.29%</td>
+              <td class="num">12.77%</td>
+              <td class="num">13.06%</td>
+              <td class="num">13.27%</td>
+              <td class="num tone-info"><strong>11.39%</strong></td>
             </tr>
             <tr>
               <td><strong>&gt;30s (long audio)</strong></td>
               <td class="num">287</td>
               <td class="num">27.7%</td>
-              <td class="num">27.99%</td>
-              <td class="num">23.12%</td>
-              <td class="num">21.83%</td>
-              <td class="num">21.98%</td>
-              <td class="num">19.60%</td>
-              <td class="num tone-success"><strong>19.22%</strong></td>
-              <td class="num">19.35%</td>
-              <td class="num tone-info"><strong>17.39%</strong></td>
+              <td class="num">25.96%</td>
+              <td class="num">21.64%</td>
+              <td class="num">20.10%</td>
+              <td class="num">20.24%</td>
+              <td class="num">17.92%</td>
+              <td class="num">17.12%</td>
+              <td class="num">17.50%</td>
+              <td class="num">17.72%</td>
+              <td class="num tone-info"><strong>15.53%</strong></td>
             </tr>
           </tbody>
         </table>
@@ -682,8 +686,8 @@
       <h2>2. Stratification by Speaker First Language (L1 Substrate Fairness)</h2>
       <p>
         59% of respondents speak an indigenous Bantu or South Cushitic (<code>Kiiraq</code>) L1. Zero-shot Gemini 2.5 Flash
-        collapses on <code>Kizigua</code> L1 speakers (<strong>40.89%</strong> Fair WER) due to repetition loops, whereas
-        <code>LoRA-QC + Gemma-MBR</code> cuts Kizigua error in half (<strong>20.35%</strong>, and <strong>17.67%</strong> with Fusion).
+        collapses on <code>Kizigua</code> L1 speakers (<strong>39.34%</strong> Fair WER) due to repetition loops, whereas
+        <code>lora-qc-v2</code> cuts Kizigua error to <strong>19.45%</strong> (<strong>15.98%</strong> with Fusion).
       </p>
       <div class="table-wrap">
         <table>
@@ -697,6 +701,7 @@
               <th class="num">Stage-1 LoRA (30s)</th>
               <th class="num">Stage-2 GRPO</th>
               <th class="num">LoRA-QC (FullAudio)</th>
+              <th class="num">LoRA-QC-v2 (Deploy)</th>
               <th class="num">LoRA-QC + Gemma-MBR</th>
               <th class="num">Local-ROVER</th>
               <th class="num">3-Model Fusion</th>
@@ -707,118 +712,127 @@
               <td><strong>Kiswahili</strong></td>
               <td>Bantu (Sabaki G42)</td>
               <td class="num">425</td>
-              <td class="num">22.95%</td>
-              <td class="num">18.86%</td>
-              <td class="num">17.76%</td>
-              <td class="num">17.66%</td>
-              <td class="num">15.83%</td>
-              <td class="num tone-success"><strong>15.53%</strong></td>
-              <td class="num">15.61%</td>
-              <td class="num tone-info"><strong>13.96%</strong></td>
+              <td class="num">21.00%</td>
+              <td class="num">17.77%</td>
+              <td class="num">16.34%</td>
+              <td class="num">16.22%</td>
+              <td class="num">14.44%</td>
+              <td class="num">13.80%</td>
+              <td class="num">14.15%</td>
+              <td class="num">14.26%</td>
+              <td class="num tone-info"><strong>12.63%</strong></td>
             </tr>
             <tr>
               <td><strong>Kikagulu</strong></td>
               <td>Bantu (East Ruvu G12)</td>
               <td class="num">282</td>
-              <td class="num">25.07%</td>
-              <td class="num">20.21%</td>
-              <td class="num">19.65%</td>
-              <td class="num">18.96%</td>
+              <td class="num">22.57%</td>
               <td class="num">18.13%</td>
-              <td class="num tone-success"><strong>17.77%</strong></td>
-              <td class="num">18.07%</td>
-              <td class="num tone-info"><strong>16.51%</strong></td>
+              <td class="num">17.32%</td>
+              <td class="num">16.72%</td>
+              <td class="num">16.03%</td>
+              <td class="num">15.13%</td>
+              <td class="num">15.65%</td>
+              <td class="num">15.97%</td>
+              <td class="num tone-info"><strong>13.61%</strong></td>
             </tr>
             <tr>
               <td><strong>Kiiraq (Iraqw)</strong></td>
               <td>South Cushitic</td>
               <td class="num">97</td>
-              <td class="num">22.83%</td>
-              <td class="num">20.60%</td>
-              <td class="num">19.29%</td>
-              <td class="num">19.07%</td>
-              <td class="num">17.76%</td>
-              <td class="num">18.12%</td>
-              <td class="num tone-success"><strong>17.74%</strong></td>
-              <td class="num tone-info"><strong>14.99%</strong></td>
+              <td class="num">21.24%</td>
+              <td class="num">19.69%</td>
+              <td class="num">17.94%</td>
+              <td class="num">17.85%</td>
+              <td class="num">16.51%</td>
+              <td class="num">16.53%</td>
+              <td class="num">16.81%</td>
+              <td class="num">16.49%</td>
+              <td class="num tone-info"><strong>14.83%</strong></td>
             </tr>
             <tr>
               <td><strong>Kichaga</strong></td>
               <td>Bantu (Chaga E60)</td>
               <td class="num">93</td>
-              <td class="num">24.14%</td>
-              <td class="num">17.98%</td>
-              <td class="num">17.47%</td>
-              <td class="num">17.22%</td>
-              <td class="num">16.06%</td>
-              <td class="num">16.17%</td>
-              <td class="num tone-success"><strong>15.98%</strong></td>
-              <td class="num tone-info"><strong>13.58%</strong></td>
+              <td class="num">21.01%</td>
+              <td class="num">15.48%</td>
+              <td class="num">15.41%</td>
+              <td class="num">15.08%</td>
+              <td class="num">13.87%</td>
+              <td class="num">12.74%</td>
+              <td class="num">13.91%</td>
+              <td class="num">13.84%</td>
+              <td class="num tone-info"><strong>11.44%</strong></td>
             </tr>
             <tr>
               <td><strong>Kizigua</strong></td>
               <td>Bantu (Seuta G31)</td>
               <td class="num">50</td>
-              <td class="num">31.02%</td>
-              <td class="num tone-danger">40.89%</td>
-              <td class="num">24.28%</td>
-              <td class="num">26.65%</td>
-              <td class="num">22.11%</td>
-              <td class="num tone-success"><strong>20.35%</strong></td>
-              <td class="num">22.07%</td>
-              <td class="num tone-info"><strong>17.67%</strong></td>
+              <td class="num">28.44%</td>
+              <td class="num tone-danger">39.34%</td>
+              <td class="num">22.81%</td>
+              <td class="num">25.20%</td>
+              <td class="num">20.46%</td>
+              <td class="num">19.45%</td>
+              <td class="num">18.76%</td>
+              <td class="num">20.50%</td>
+              <td class="num tone-info"><strong>15.98%</strong></td>
             </tr>
             <tr>
               <td><strong>Kinguu</strong></td>
               <td>Bantu (Seuta G34)</td>
               <td class="num">31</td>
-              <td class="num">18.45%</td>
-              <td class="num">16.82%</td>
-              <td class="num">15.19%</td>
-              <td class="num">15.83%</td>
-              <td class="num">13.48%</td>
-              <td class="num tone-success"><strong>12.99%</strong></td>
-              <td class="num">13.13%</td>
-              <td class="num tone-info"><strong>12.90%</strong></td>
+              <td class="num">16.88%</td>
+              <td class="num">16.03%</td>
+              <td class="num">14.53%</td>
+              <td class="num">15.10%</td>
+              <td class="num">12.54%</td>
+              <td class="num">12.61%</td>
+              <td class="num">12.11%</td>
+              <td class="num">12.39%</td>
+              <td class="num tone-info"><strong>12.06%</strong></td>
             </tr>
             <tr>
               <td><strong>Unknown</strong></td>
               <td>Unspecified</td>
               <td class="num">27</td>
-              <td class="num">25.45%</td>
-              <td class="num">20.54%</td>
-              <td class="num">17.96%</td>
-              <td class="num">18.60%</td>
-              <td class="num tone-success"><strong>17.05%</strong></td>
-              <td class="num tone-success"><strong>17.05%</strong></td>
-              <td class="num tone-success"><strong>17.05%</strong></td>
-              <td class="num tone-info"><strong>16.54%</strong></td>
+              <td class="num">22.24%</td>
+              <td class="num">19.38%</td>
+              <td class="num">17.04%</td>
+              <td class="num">17.30%</td>
+              <td class="num">15.86%</td>
+              <td class="num tone-success"><strong>14.56%</strong></td>
+              <td class="num">15.47%</td>
+              <td class="num">15.73%</td>
+              <td class="num">15.34%</td>
             </tr>
             <tr>
               <td><strong>Kipare</strong></td>
               <td>Bantu (Pare G22)</td>
               <td class="num">19</td>
-              <td class="num">13.44%</td>
-              <td class="num">12.03%</td>
-              <td class="num">11.79%</td>
-              <td class="num">11.08%</td>
-              <td class="num tone-success"><strong>9.67%</strong></td>
-              <td class="num">9.91%</td>
-              <td class="num tone-success"><strong>9.67%</strong></td>
-              <td class="num tone-info"><strong>8.25%</strong></td>
+              <td class="num">11.88%</td>
+              <td class="num">11.40%</td>
+              <td class="num">11.16%</td>
+              <td class="num">10.93%</td>
+              <td class="num">9.74%</td>
+              <td class="num">8.08%</td>
+              <td class="num">9.74%</td>
+              <td class="num">9.74%</td>
+              <td class="num tone-info"><strong>7.60%</strong></td>
             </tr>
             <tr>
               <td><strong>Kimeru</strong></td>
               <td>Bantu (Chaga-Meru E61)</td>
               <td class="num">12</td>
-              <td class="num">26.83%</td>
-              <td class="num">20.98%</td>
+              <td class="num">20.00%</td>
               <td class="num">19.51%</td>
-              <td class="num">17.56%</td>
-              <td class="num">16.10%</td>
-              <td class="num tone-success"><strong>15.61%</strong></td>
-              <td class="num">16.10%</td>
-              <td class="num tone-info"><strong>15.61%</strong></td>
+              <td class="num">17.07%</td>
+              <td class="num">15.12%</td>
+              <td class="num">14.15%</td>
+              <td class="num tone-success"><strong>12.68%</strong></td>
+              <td class="num">13.66%</td>
+              <td class="num">13.66%</td>
+              <td class="num">13.66%</td>
             </tr>
           </tbody>
         </table>
@@ -837,6 +851,7 @@
               <th class="num">Stage-1 LoRA (30s)</th>
               <th class="num">Stage-2 GRPO</th>
               <th class="num">LoRA-QC (FullAudio)</th>
+              <th class="num">LoRA-QC-v2 (Deploy)</th>
               <th class="num">LoRA-QC + Gemma-MBR</th>
               <th class="num">Local-ROVER</th>
               <th class="num">3-Model Fusion</th>
@@ -847,79 +862,85 @@
               <td><strong>Gairo</strong></td>
               <td>Morogoro (Kikagulu / Kiswahili)</td>
               <td class="num">431</td>
-              <td class="num">22.90%</td>
-              <td class="num">18.80%</td>
-              <td class="num">17.24%</td>
-              <td class="num">16.85%</td>
-              <td class="num">16.12%</td>
-              <td class="num tone-success"><strong>15.78%</strong></td>
-              <td class="num">15.99%</td>
-              <td class="num tone-info"><strong>14.48%</strong></td>
+              <td class="num">20.55%</td>
+              <td class="num">17.14%</td>
+              <td class="num">15.28%</td>
+              <td class="num">14.92%</td>
+              <td class="num">14.25%</td>
+              <td class="num">13.47%</td>
+              <td class="num">13.91%</td>
+              <td class="num">14.15%</td>
+              <td class="num tone-info"><strong>12.21%</strong></td>
             </tr>
             <tr>
               <td><strong>Hai</strong></td>
               <td>Kilimanjaro (Kichaga / Kiswahili)</td>
               <td class="num">179</td>
-              <td class="num">25.24%</td>
-              <td class="num">20.49%</td>
-              <td class="num">19.07%</td>
-              <td class="num">18.74%</td>
-              <td class="num">17.40%</td>
-              <td class="num">17.28%</td>
-              <td class="num tone-success"><strong>17.18%</strong></td>
-              <td class="num tone-info"><strong>14.80%</strong></td>
+              <td class="num">22.75%</td>
+              <td class="num">18.60%</td>
+              <td class="num">17.48%</td>
+              <td class="num">17.17%</td>
+              <td class="num">15.73%</td>
+              <td class="num">14.54%</td>
+              <td class="num">15.49%</td>
+              <td class="num">15.54%</td>
+              <td class="num tone-info"><strong>13.17%</strong></td>
             </tr>
             <tr>
               <td><strong>Kilindi</strong></td>
               <td>Tanga (Kizigua / Kinguu)</td>
               <td class="num">153</td>
-              <td class="num">23.94%</td>
-              <td class="num">24.39%</td>
-              <td class="num">19.94%</td>
-              <td class="num">20.66%</td>
-              <td class="num">17.92%</td>
-              <td class="num tone-success"><strong>16.84%</strong></td>
-              <td class="num">17.85%</td>
-              <td class="num tone-info"><strong>15.55%</strong></td>
+              <td class="num">21.82%</td>
+              <td class="num">23.06%</td>
+              <td class="num">18.34%</td>
+              <td class="num">19.11%</td>
+              <td class="num">16.42%</td>
+              <td class="num">15.58%</td>
+              <td class="num">15.38%</td>
+              <td class="num">16.41%</td>
+              <td class="num tone-info"><strong>13.57%</strong></td>
             </tr>
             <tr>
               <td><strong>Babati</strong></td>
               <td>Manyara (Kiiraq / Kiswahili)</td>
               <td class="num">138</td>
-              <td class="num">23.87%</td>
-              <td class="num">20.89%</td>
-              <td class="num">19.97%</td>
-              <td class="num">19.66%</td>
-              <td class="num">17.10%</td>
-              <td class="num">17.29%</td>
-              <td class="num tone-success"><strong>16.93%</strong></td>
-              <td class="num tone-info"><strong>15.63%</strong></td>
+              <td class="num">21.75%</td>
+              <td class="num">19.68%</td>
+              <td class="num">18.25%</td>
+              <td class="num">17.92%</td>
+              <td class="num">15.50%</td>
+              <td class="num">14.93%</td>
+              <td class="num">15.73%</td>
+              <td class="num">15.34%</td>
+              <td class="num tone-info"><strong>14.42%</strong></td>
             </tr>
             <tr>
               <td><strong>Meru</strong></td>
               <td>Arusha (Kimeru / Kiswahili)</td>
               <td class="num">87</td>
-              <td class="num">27.41%</td>
-              <td class="num">20.29%</td>
-              <td class="num">19.47%</td>
-              <td class="num">19.50%</td>
-              <td class="num">17.53%</td>
-              <td class="num">17.33%</td>
-              <td class="num tone-success"><strong>17.30%</strong></td>
-              <td class="num tone-info"><strong>15.74%</strong></td>
+              <td class="num">25.13%</td>
+              <td class="num">19.43%</td>
+              <td class="num">18.57%</td>
+              <td class="num">18.67%</td>
+              <td class="num">16.56%</td>
+              <td class="num">16.26%</td>
+              <td class="num">16.29%</td>
+              <td class="num">16.33%</td>
+              <td class="num tone-info"><strong>14.88%</strong></td>
             </tr>
             <tr>
               <td><strong>Mbulu</strong></td>
               <td>Manyara (Kiiraq)</td>
               <td class="num">48</td>
-              <td class="num">22.24%</td>
-              <td class="num">18.86%</td>
-              <td class="num">17.88%</td>
-              <td class="num">17.92%</td>
-              <td class="num tone-success"><strong>16.17%</strong></td>
-              <td class="num">16.62%</td>
-              <td class="num tone-success"><strong>16.17%</strong></td>
-              <td class="num tone-info"><strong>12.38%</strong></td>
+              <td class="num">21.30%</td>
+              <td class="num">18.35%</td>
+              <td class="num">17.12%</td>
+              <td class="num">17.08%</td>
+              <td class="num">15.44%</td>
+              <td class="num">16.02%</td>
+              <td class="num">15.77%</td>
+              <td class="num">15.44%</td>
+              <td class="num tone-info"><strong>13.36%</strong></td>
             </tr>
           </tbody>
         </table>
@@ -1031,16 +1052,16 @@
 \toprule
 \textbf{System} &amp; \textbf{Adaptation / Decoding Regime} &amp; \textbf{Legacy WER} &amp; \textbf{Fixed WER} &amp; \textbf{Fixed CER} &amp; \textbf{Fair WER} &amp; \textbf{Fair CER} &amp; \textbf{Fair Clean WER} \\
 \midrule
-\texttt{ndizi-whisper-turbo} &amp; Prior domain Whisper-v3-Turbo &amp; 35.94 &amp; 32.00 &amp; 11.52 &amp; 23.86 &amp; 9.86 &amp; 22.87 \\
-\texttt{gemini-2.5-flash} &amp; Zero-shot multimodal LLM &amp; 36.20 &amp; 27.66 &amp; 10.68 &amp; 20.53 &amp; 8.96 &amp; 18.61 \\
-\texttt{sunflower51-lora} &amp; Stage-1 LoRA ($\le 30$s train only) &amp; 28.83 &amp; 25.62 &amp; 8.84 &amp; 18.64 &amp; 7.25 &amp; 17.80 \\
-\texttt{sunflower51-grpo} &amp; Stage-2 Quality-Gated Semantic GRPO &amp; 28.67 &amp; 25.55 &amp; 8.79 &amp; 18.53 &amp; 7.18 &amp; 17.86 \\
-\texttt{sunflower51-lora-qc} &amp; Stage-1 LoRA + QC + MMS\_FA (prior) &amp; 33.28 &amp; 23.66 &amp; 8.15 &amp; 16.90 &amp; 6.64 &amp; 16.05 \\
-\texttt{sunflower51-lora-qc-v2} &amp; Stage-1 LoRA-QC v2 (5 epochs, deploy) &amp; 33.49 &amp; 24.11 &amp; 8.13 &amp; \textbf{16.33} &amp; \textbf{6.40} &amp; \textbf{15.56} \\
-\texttt{sunflower51-local-rover} &amp; 3-Checkpoint ROVER (LoRA-QC+LoRA+GRPO) &amp; 32.99 &amp; \textbf{23.37} &amp; \textbf{8.08} &amp; 16.76 &amp; 6.60 &amp; 15.91 \\
-\texttt{sunflower51-lora-qc-gemma-mbr} &amp; LoRA-QC + Overlap-VAD LCS + Gemma-MBR &amp; 33.60 &amp; 24.25 &amp; 8.19 &amp; 16.59 &amp; 6.49 &amp; 15.91 \\
+\texttt{ndizi-whisper-turbo} &amp; Prior domain Whisper-v3-Turbo &amp; 35.94 &amp; 32.00 &amp; 11.52 &amp; 21.66 &amp; 9.55 &amp; 20.64 \\
+\texttt{gemini-2.5-flash} &amp; Zero-shot multimodal LLM &amp; 36.20 &amp; 27.66 &amp; 10.68 &amp; 19.09 &amp; 8.67 &amp; 17.15 \\
+\texttt{sunflower51-lora} &amp; Stage-1 LoRA ($\le 30$s train only) &amp; 28.83 &amp; 25.62 &amp; 8.84 &amp; 16.98 &amp; 6.96 &amp; 16.13 \\
+\texttt{sunflower51-grpo} &amp; Stage-2 Quality-Gated Semantic GRPO &amp; 28.67 &amp; 25.55 &amp; 8.79 &amp; 16.89 &amp; 6.88 &amp; 16.21 \\
+\texttt{sunflower51-lora-qc} &amp; Stage-1 LoRA + QC + MMS\_FA (prior) &amp; 33.28 &amp; 23.66 &amp; 8.15 &amp; 15.30 &amp; 6.35 &amp; 14.45 \\
+\texttt{sunflower51-lora-qc-v2} &amp; Stage-1 LoRA-QC v2 (5 epochs, deploy) &amp; 33.49 &amp; 24.11 &amp; 8.13 &amp; \textbf{14.60} &amp; \textbf{6.10} &amp; \textbf{13.82} \\
+\texttt{sunflower51-local-rover} &amp; 3-Checkpoint ROVER (LoRA-QC+LoRA+GRPO) &amp; 32.99 &amp; \textbf{23.37} &amp; \textbf{8.08} &amp; 15.19 &amp; 6.32 &amp; 14.33 \\
+\texttt{sunflower51-lora-qc-gemma-mbr} &amp; LoRA-QC + Overlap-VAD LCS + Gemma-MBR &amp; 33.60 &amp; 24.25 &amp; 8.19 &amp; 14.98 &amp; 6.20 &amp; 14.28 \\
 \midrule
-\texttt{fusion-lora-qc-gemini-turbo} &amp; 3-Model Cross-Family LLM Fusion ($n=1{,}028$) &amp; 29.54 &amp; \textbf{21.69} &amp; 8.53 &amp; \textbf{14.88} &amp; 6.83 &amp; \textbf{14.08} \\
+\texttt{fusion-lora-qc-gemini-turbo} &amp; 3-Model Cross-Family LLM Fusion ($n=1{,}028$) &amp; 29.27 &amp; \textbf{21.48} &amp; 8.16 &amp; \textbf{13.21} &amp; 6.20 &amp; \textbf{12.53} \\
 \bottomrule
 \end{tabular}
 \end{table*}</code></pre>

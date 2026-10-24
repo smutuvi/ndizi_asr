@@ -1,7 +1,7 @@
-group,n,Whisper-Turbo__fair_wer,Whisper-Turbo__fixed_wer,Gemini-2.5-Flash__fair_wer,Gemini-2.5-Flash__fixed_wer,Stage1-LoRA (30s)__fair_wer,Stage1-LoRA (30s)__fixed_wer,Stage2-GRPO__fair_wer,Stage2-GRPO__fixed_wer,Stage1-LoRA-QC (FullAudio)__fair_wer,Stage1-LoRA-QC (FullAudio)__fixed_wer,LoRA-QC + Gemma-MBR__fair_wer,LoRA-QC + Gemma-MBR__fixed_wer,Local-ROVER__fair_wer,Local-ROVER__fixed_wer,3-Model Fusion__fair_wer,3-Model Fusion__fixed_wer
-Gairo,431,0.229,0.3156,0.188,0.264,0.1724,0.2429,0.1685,0.2399,0.1612,0.2336,0.1578,0.2362,0.1599,0.2298,0.1448,0.219
-Hai,179,0.2524,0.3295,0.2049,0.2709,0.1907,0.2486,0.1874,0.2453,0.174,0.2353,0.1728,0.2423,0.1718,0.2321,0.148,0.2101
-Kilindi,153,0.2394,0.3046,0.2439,0.3024,0.1994,0.2588,0.2066,0.2653,0.1792,0.2398,0.1684,0.2374,0.1785,0.2377,0.1555,0.2106
-Babati,138,0.2387,0.329,0.2089,0.2899,0.1997,0.3006,0.1966,0.2982,0.171,0.252,0.1729,0.2677,0.1693,0.25,0.1563,0.2383
-Meru,87,0.2741,0.3511,0.2029,0.2574,0.1947,0.2418,0.195,0.2412,0.1753,0.2231,0.1733,0.2302,0.173,0.2189,0.1574,0.2069
-Mbulu,48,0.2224,0.3129,0.1886,0.2758,0.1788,0.2446,0.1792,0.2469,0.1617,0.2217,0.1662,0.245,0.1617,0.222,0.1238,0.1885
+group,n,Whisper-Turbo__fair_wer,Whisper-Turbo__fixed_wer,Gemini-2.5-Flash__fair_wer,Gemini-2.5-Flash__fixed_wer,Stage1-LoRA (30s)__fair_wer,Stage1-LoRA (30s)__fixed_wer,Stage2-GRPO__fair_wer,Stage2-GRPO__fixed_wer,Stage1-LoRA-QC (FullAudio)__fair_wer,Stage1-LoRA-QC (FullAudio)__fixed_wer,Stage1-LoRA-QC-v2 (Deploy)__fair_wer,Stage1-LoRA-QC-v2 (Deploy)__fixed_wer,LoRA-QC + Gemma-MBR__fair_wer,LoRA-QC + Gemma-MBR__fixed_wer,Local-ROVER__fair_wer,Local-ROVER__fixed_wer,3-Model Fusion__fair_wer,3-Model Fusion__fixed_wer
+Gairo,431,0.2055,0.3156,0.1714,0.264,0.1528,0.2429,0.1492,0.2399,0.1425,0.2336,0.1347,0.2341,0.1391,0.2362,0.1415,0.2298,0.1221,0.2136
+Hai,179,0.2275,0.3295,0.186,0.2709,0.1748,0.2486,0.1717,0.2453,0.1573,0.2353,0.1454,0.2343,0.1549,0.2423,0.1554,0.2321,0.1317,0.2101
+Kilindi,153,0.2182,0.3046,0.2306,0.3024,0.1834,0.2588,0.1911,0.2653,0.1642,0.2398,0.1558,0.2428,0.1538,0.2374,0.1641,0.2377,0.1357,0.2058
+Babati,138,0.2175,0.329,0.1968,0.2899,0.1825,0.3006,0.1792,0.2982,0.155,0.252,0.1493,0.2626,0.1573,0.2677,0.1534,0.25,0.1442,0.2383
+Meru,87,0.2513,0.3511,0.1943,0.2574,0.1857,0.2418,0.1867,0.2412,0.1656,0.2231,0.1626,0.2325,0.1629,0.2302,0.1633,0.2189,0.1488,0.2069
+Mbulu,48,0.213,0.3129,0.1835,0.2758,0.1712,0.2446,0.1708,0.2469,0.1544,0.2217,0.1602,0.2469,0.1577,0.245,0.1544,0.222,0.1336,0.2051

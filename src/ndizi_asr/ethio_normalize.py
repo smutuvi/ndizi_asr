@@ -218,31 +218,69 @@ _SWAHILI_BACKCHANNEL_RE = re.compile(
 
 _SWAHILI_COMPOUND_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bkwa\s+sababu\b"), "kwasababu"),
+    (re.compile(r"\bkwa\s+sabu\b"), "kwasababu"),
+    (re.compile(r"\bkwa\s+saabu\b"), "kwasababu"),
     (re.compile(r"\bkwa\s+kweli\b"), "kwakweli"),
     (re.compile(r"\bkwa\s+hiyo\b"), "kwahiyo"),
     (re.compile(r"\bkwa\s+hivyo\b"), "kwahivyo"),
     (re.compile(r"\bkwa\s+iyo\b"), "kwahiyo"),
+    (re.compile(r"\bkwa\s+io\b"), "kwahiyo"),
+    (re.compile(r"\bkwa\s+hio\b"), "kwahiyo"),
     (re.compile(r"\bkwa\s+ivyo\b"), "kwahivyo"),
+    (re.compile(r"\bkwa\s+ivo\b"), "kwahivyo"),
+    (re.compile(r"\bkwa\s+ajili\b"), "kwaajili"),
+    (re.compile(r"\bkwa\s+ajiri\b"), "kwaajili"),
+    (re.compile(r"\bkwa\s+vile\b"), "kwavile"),
+    (re.compile(r"\bkwa\s+nini\b"), "kwanini"),
+    (re.compile(r"\bkwa\s+ujumla\b"), "kwaujumla"),
     (re.compile(r"\bvile\s+vile\b"), "vilevile"),
     (re.compile(r"\bmbali\s+mbali\b"), "mbalimbali"),
     (re.compile(r"\bmmoja\s+mmoja\b"), "mmojammoja"),
+    (re.compile(r"\bmoja\s+moja\b"), "mojamoja"),
+    (re.compile(r"\bkamba\s+kamba\b"), "kambakamba"),
+    (re.compile(r"\bpale\s+pale\b"), "palepale"),
+    (re.compile(r"\bhapo\s+hapo\b"), "hapohapo"),
+    (re.compile(r"\bhapa\s+hapa\b"), "hapahapa"),
+    (re.compile(r"\bmara\s+kwa\s+mara\b"), "marakwamara"),
     (re.compile(r"\bkidogo\s+kidogo\b"), "kidogokidogo"),
     (re.compile(r"\bpole\s+pole\b"), "polepole"),
     (re.compile(r"\bsawa\s+sawa\b"), "sawa"),
     (re.compile(r"\bsasa\s+hivi\b"), "sasahivi"),
     (re.compile(r"\bsasa\s+ivi\b"), "sasahivi"),
     (re.compile(r"\bjuu\s+ya\b"), "juuya"),
+    (re.compile(r"\bbarabara\s+ni\b"), "barabarani"),
+    (re.compile(r"\bshamba\s+ni\b"), "shambani"),
+    (re.compile(r"\bnyumba\s+ni\b"), "nyumbani"),
     # Split agglutinated Swahili relative/auxiliary verbs in survey transcripts
     (re.compile(r"\bunacho\s+kipenda\b"), "unachokipenda"),
     (re.compile(r"\bninacho\s+kipenda\b"), "ninachokipenda"),
     (re.compile(r"\bnilicho\s+kipenda\b"), "nilichokipenda"),
     (re.compile(r"\bunacho\s+kiona\b"), "unachokiona"),
     (re.compile(r"\bninacho\s+kiona\b"), "ninachokiona"),
+    (re.compile(r"\bnilicho\s+kiona\b"), "nilichokiona"),
     (re.compile(r"\bunacho\s+penda\b"), "unachopenda"),
     (re.compile(r"\bninacho\s+penda\b"), "ninachopenda"),
     (re.compile(r"\bnisicho\s+kipenda\b"), "nisichokipenda"),
+    (re.compile(r"\busicho\s+kipenda\b"), "usichokipenda"),
+    (re.compile(r"\bushicho\s+kipenda\b"), "usichokipenda"),
+    (re.compile(r"\buschokipenda\b"), "usichokipenda"),
     (re.compile(r"\bnisicho\s+penda\b"), "nisichopenda"),
+    (re.compile(r"\busicho\s+penda\b"), "usichopenda"),
+    (re.compile(r"\bunacho\s+kichukia\b"), "unachokichukia"),
+    (re.compile(r"\bnilicho\s+kichukia\b"), "nilichokichukia"),
+    (re.compile(r"\bnisicho\s+kichukia\b"), "nisichokichukia"),
     (re.compile(r"\bkisicho\s+kupendeza\b"), "kisichokupendeza"),
+    (re.compile(r"\buna\s+kipenda\b"), "unakipenda"),
+    (re.compile(r"\buna\s+penda\b"), "unapenda"),
+    (re.compile(r"\bnaya\s+penda\b"), "nayapenda"),
+    (re.compile(r"\bhuja\s+kipenda\b"), "hujakipenda"),
+    (re.compile(r"\buja\s+kipenda\b"), "hujakipenda"),
+    (re.compile(r"\bume\s+kipenda\b"), "umekipenda"),
+    (re.compile(r"\bnime\s+kipenda\b"), "nimekipenda"),
+    (re.compile(r"\buna\s+maanisha\b"), "unamaanisha"),
+    (re.compile(r"\bnina\s+maanisha\b"), "ninamaanisha"),
+    (re.compile(r"\bana\s+maanisha\b"), "anamaanisha"),
+    (re.compile(r"\bina\s+maanisha\b"), "inamaanisha"),
     (re.compile(r"\bina\s+maana\b"), "inamaana"),
     (re.compile(r"\bina\s+zaa\b"), "inazaa"),
     (re.compile(r"\bina\s+kuwa\b"), "inakuwa"),
@@ -250,7 +288,28 @@ _SWAHILI_COMPOUND_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bina\s+vutia\b"), "inavutia"),
     (re.compile(r"\byana\s+vutia\b"), "yanavutia"),
     (re.compile(r"\byan\s+vutia\b"), "yanavutia"),
+    (re.compile(r"\bina\s+vumilia\b"), "inavumilia"),
+    (re.compile(r"\byana\s+vumilia\b"), "yanavumilia"),
+    (re.compile(r"\bina\s+suasua\b"), "inasuasua"),
+    (re.compile(r"\bkusua\s+sua\b"), "kusuasua"),
+    (re.compile(r"\bina\s+leta\b"), "inaleta"),
+    (re.compile(r"\bina\s+wahi\b"), "inawahi"),
+    (re.compile(r"\byana\s+ota\b"), "yanaota"),
+    (re.compile(r"\bina\s+ota\b"), "inaota"),
+    (re.compile(r"\binavyo\s+onyesha\b"), "inavyoonyesha"),
+    (re.compile(r"\bunavyo\s+yaona\b"), "unavyoyaona"),
+    (re.compile(r"\byaliyo\s+onekana\b"), "yaliyoonekana"),
 ]
+
+# Legitimate Swahili words ending in a double vowel (must NOT be stripped to 1 vowel)
+_SWAHILI_LEXICAL_DOUBLE_VOWEL_WORDS: set[str] = {
+    "aa", "baa", "chaa", "daa", "faa", "gaa", "haa", "jaa", "kaa", "laa", "maa",
+    "njaa", "paa", "raa", "saa", "taa", "vaa", "waa", "zaa", "kizaazaa", "jogoo",
+    "kondoo", "kioo", "choo", "ndoo", "nguo", "juu", "kuu", "mguu", "kiu",
+    "kukuu", "mjukuu", "wajukuu", "nukuu", "shuu", "duu", "huu", "hii", "pekee",
+    "mzee", "wazee", "upungufu", "ugonjwa", "jamii", "bidii", "tii", "kutii",
+    "tabii", "nabii", "wananchi", "sharia", "asili",
+}
 
 _SWAHILI_SPELLING_MAP: dict[str, str] = {
     # L1 Bantu R/L alternation in rural Tanzania
@@ -372,6 +431,7 @@ _SWAHILI_SPELLING_MAP: dict[str, str] = {
     "ndiyo": "ndo",
     "sasaivi": "sasahivi",
     "sahivi": "sasahivi",
+    "saivi": "sasahivi",
     "iliopo": "iliyopo",
     "ulio": "uliyo",
     "walio": "waliyo",
@@ -379,8 +439,71 @@ _SWAHILI_SPELLING_MAP: dict[str, str] = {
     "ambazo": "ambazo",
     "naipendaa": "naipenda",
     "imesha": "imeisha",
+    "nimeshia": "nimeishia",
     " teh": "eeh",
+    # Additional Bantu R/L & initial H-drop / W-glide variants attested in ndizi-1-sw
+    "halaka": "haraka",
+    "araka": "haraka",
+    "ubola": "ubora",
+    "langi": "rangi",
+    "kizuli": "kizuri",
+    "kuathilika": "kuathirika",
+    "unafikili": "unafikiri",
+    "nafikili": "nafikiri",
+    "anafikili": "anafikiri",
+    "buludani": "burudani",
+    "kadli": "kadri",
+    "mala": "mara",
+    "athali": "athari",
+    "rabda": "labda",
+    "mistali": "mistari",
+    "ujakipenda": "hujakipenda",
+    "ukipendi": "hukipendi",
+    "upendi": "hupendi",
+    "apendi": "hapendi",
+    "akuna": "hakuna",
+    "apana": "hapana",
+    "asa": "hasa",
+    "hiko": "iko",
+    "hipo": "ipo",
+    "uwezavyo": "huwezavyo",
+    "ijaota": "hijaota",
+    "aishambuliwi": "haishambuliwi",
+    "adi": "hadi",
+    "flani": "fulani",
+    "ukuwaji": "ukuaji",
+    "isipokua": "isipokuwa",
+    "ilikua": "ilikuwa",
+    "walikua": "walikuwa",
+    "tulikua": "tulikuwa",
+    "nilikua": "nilikuwa",
+    "zilikua": "zilikuwa",
+    "yalikua": "yalikuwa",
+    "vinzuri": "vizuri",
+    "inawai": "inawahi",
+    "uniaambie": "uniambie",
+    "yanaonesha": "yanaonyesha",
+    "inaonesha": "inaonyesha",
+    "anaonesha": "anaonyesha",
+    "unaonesha": "unaonyesha",
+    "kwaajiri": "kwaajili",
+    "ajiri": "ajili",
+    "alafuu": "halafu",
+    "afu": "halafu",
+    "hiyoeeh": "hiyo",
+    "hiiyo": "hiyo",
 }
+
+
+def _strip_conversational_trailing_double_vowel(tok: str) -> str:
+    """Strip conversational 2-vowel drag at word end (e.g. ``kunaa`` -> ``kuna``,
+    ``kwaa`` -> ``kwa``, ``asantee`` -> ``asante``) while preserving legitimate
+    Swahili double-vowel words (``njaa``, ``saa``, ``juu``, ``kuu``, ``pekee``, etc.).
+    """
+    if len(tok) >= 3 and tok[-1] == tok[-2] and tok[-1] in "aeiou":
+        if tok not in _SWAHILI_LEXICAL_DOUBLE_VOWEL_WORDS:
+            return tok[:-1]
+    return tok
 
 
 def clean_swahili_fair_transcription(
@@ -418,8 +541,15 @@ def clean_swahili_fair_transcription(
         # Strip stray single-letter hesitation tokens at clause boundaries (m, e, u, o)
         if drop_backchannels and tok in {"m", "e", "u", "o", "hm", "mm", "eh", "ah", "uh", "oh"}:
             continue
-        tokens.append(_SWAHILI_SPELLING_MAP.get(tok, tok))
-    return " ".join(tokens)
+        tok = _SWAHILI_SPELLING_MAP.get(tok, tok)
+        tok = _strip_conversational_trailing_double_vowel(tok)
+        tok = _SWAHILI_SPELLING_MAP.get(tok, tok)
+        tokens.append(tok)
+    # Second compound pass in case trailing-vowel strip exposed a compound (e.g. "kwa hiyo")
+    joined = " ".join(tokens)
+    for pat, repl in _SWAHILI_COMPOUND_PATTERNS:
+        joined = pat.sub(repl, joined)
+    return joined
 
 
 def clean_swahili_training_target(text: str) -> str:
@@ -454,7 +584,10 @@ def clean_swahili_training_target(text: str) -> str:
         elif re.fullmatch(r"(?:a+h+|a{2,})", low):
             canon = "aah"
         else:
-            canon = _SWAHILI_SPELLING_MAP.get(low, core)
+            mapped = _SWAHILI_SPELLING_MAP.get(low, low)
+            mapped = _strip_conversational_trailing_double_vowel(mapped)
+            mapped = _SWAHILI_SPELLING_MAP.get(mapped, mapped)
+            canon = mapped if mapped != low else core
             if core and core[0].isupper() and canon and canon != core:
                 canon = canon[0].upper() + canon[1:]
         out_tokens.append(f"{lead}{canon}{trail}")

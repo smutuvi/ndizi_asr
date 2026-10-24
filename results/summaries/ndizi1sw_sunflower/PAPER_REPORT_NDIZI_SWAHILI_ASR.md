@@ -14,11 +14,11 @@ Spontaneous agricultural survey speech recorded in rural East Africa presents th
 3. **Multilingual Preservation vs. Acoustic Domain Shift:** Adapting solely the decoder leaves the acoustic encoder mismatched to noisy rural mobile recordings and non-native Swahili accents, whereas unfreezing the encoder destroys the 51-language representation of `SunflowerASR-51`.
 
 By systematically addressing each bottleneck, our experimentation achieved:
-- **35.94% $\rightarrow$ 23.86% (-12.08 pp)** on the baseline `ndizi-whisper-turbo` predictions purely by fixing glued-punctuation/mojibake tokenization (`32.00%` Fixed WER) and applying linguistically fair Swahili normalization (`23.86%` Fair WER).
-- **23.86% $\rightarrow$ 16.90% (-6.96 pp)** single-model Swahili Fair WER (`16.05%` Fair Clean WER) via **Stage-1 LoRA-QC (`sunflower51-lora-qc`)**: automated dataset QC + `torchaudio` `MMS_FA` forced-aligned long-audio training segmentation (5,572 $\rightarrow$ 7,610 segments) + 100%-frozen-base encoder+decoder rsLoRA + SpecAugment.
-- **16.90% $\rightarrow$ 16.33% (-0.57 pp)** best single-model Swahili Fair WER (**`15.56%` Fair Clean WER**, `5.75%` CER) via **`sunflower51-lora-qc-v2`**: same QC + MMS_FA recipe with on-the-fly feature extraction and a completed 5-epoch train (`n_train=7,608`).
-- **16.33% $\rightarrow$ 16.59%** optional test-time **EmbeddingGemma MBR** on the prior LoRA-QC checkpoint (slightly behind v2 Fair; still useful for Fixed/ensemble ablations).
-- **16.33% $\rightarrow$ 14.88% (-1.45 pp)** Swahili Fair WER (**`14.08%` Fair Clean WER**, `6.09%` CER) via **3-Model Cross-Family Fusion** combining `sunflower51-lora-qc`, `gemini-2.5-flash`, and `ndizi-whisper-turbo` with automatic ASR fallback on empty LLM responses.
+- **35.94% $\rightarrow$ 21.66% (-14.28 pp)** on the baseline `ndizi-whisper-turbo` predictions purely by fixing glued-punctuation/mojibake tokenization (`32.00%` Fixed WER) and applying linguistically fair Swahili normalization (`21.66%` Fair WER).
+- **21.66% $\rightarrow$ 15.30% (-6.36 pp)** single-model Swahili Fair WER (`14.45%` Fair Clean WER) via **Stage-1 LoRA-QC (`sunflower51-lora-qc`)**: automated dataset QC + `torchaudio` `MMS_FA` forced-aligned long-audio training segmentation (5,572 $\rightarrow$ 7,610 segments) + 100%-frozen-base encoder+decoder rsLoRA + SpecAugment.
+- **15.30% $\rightarrow$ 14.60% (-0.70 pp)** best single-model Swahili Fair WER (**`13.82%` Fair Clean WER**, `5.46%` CER) via **`sunflower51-lora-qc-v2`**: same QC + MMS_FA recipe with on-the-fly feature extraction and a completed 5-epoch train (`n_train=7,608`).
+- **14.60% $\rightarrow$ 14.98%** optional test-time **EmbeddingGemma MBR** on the prior LoRA-QC checkpoint (still useful for Fixed/ensemble ablations).
+- **14.60% $\rightarrow$ 13.21% (-1.39 pp)** Swahili Fair WER (**`12.53%` Fair Clean WER**, `5.63%` CER) via **3-Model Cross-Family Fusion** combining `sunflower51-lora-qc`, `gemini-2.5-flash`, and `ndizi-whisper-turbo` with automatic ASR fallback on empty or truncated LLM responses.
 
 ---
 
@@ -26,15 +26,15 @@ By systematically addressing each bottleneck, our experimentation achieved:
 
 | System ID | Description / Role | $n$ | Legacy WER | Fixed WER | Fixed CER | Fixed Clean WER | Swahili Fair WER | Swahili Fair CER | **Fair Clean WER** | **Fair Clean CER** |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `ndizi-whisper-turbo` | Prior domain fine-tuned Whisper-v3-Turbo | 1,036 | 35.94% | 32.00% | 11.52% | 31.05% | 23.86% | 9.86% | 22.87% | 8.97% |
-| `gemini-2.5-flash` | Zero-shot multimodal LLM (Swahili prompt) | 1,036 | 36.20% | 27.66% | 10.68% | 25.85% | 20.53% | 8.96% | 18.61% | 7.54% |
-| `sunflower51-lora` | Stage-1 SunflowerASR-51 LoRA ($\le 30\text{s}$ only) | 1,036 | 28.83% | 25.62% | 8.84% | 24.80% | 18.64% | 7.25% | 17.80% | 6.58% |
-| `sunflower51-grpo` | Stage-2 Quality-Gated Semantic GRPO | 1,036 | 28.67% | 25.55% | 8.79% | 24.89% | 18.53% | 7.18% | 17.86% | 6.60% |
-| `sunflower51-lora-qc` | Stage-1 LoRA-QC (prior checkpoint) | 1,036 | 33.28% | 23.66% | 8.15% | 22.83% | 16.90% | 6.64% | 16.05% | 5.95% |
-| `sunflower51-lora-qc-v2` | **Best Single Model / Deploy:** QC + MMS_FA + rsLoRA (5 ep) | 1,036 | 33.49% | 24.11% | 8.13% | 23.36% | **16.33%** | **6.40%** | **15.56%** | **5.75%** |
-| `sunflower51-local-rover` | Local 3-Checkpoint ROVER (LoRA-QC + LoRA + GRPO) | 1,036 | 32.99% | **23.37%** | **8.08%** | **22.54%** | 16.76% | 6.60% | 15.91% | 5.91% |
-| `sunflower51-lora-qc-gemma-mbr` | LoRA-QC + 5-Beam Gemma-MBR (test-time) | 1,036 | 33.60% | 24.25% | 8.19% | 23.59% | 16.59% | 6.49% | 15.91% | 5.91% |
-| `fusion-lora-qc-gemini-turbo` | **Best Overall:** 3-Model LLM Fusion + ASR Fallback | 1,028 | 29.54% | **21.69%** | 8.53% | **20.92%** | **14.88%** | 6.83% | **14.08%** | 6.09% |
+| `ndizi-whisper-turbo` | Prior domain fine-tuned Whisper-v3-Turbo | 1,036 | 35.94% | 32.00% | 11.52% | 31.05% | 21.66% | 9.55% | 20.64% | 8.65% |
+| `gemini-2.5-flash` | Zero-shot multimodal LLM (Swahili prompt) | 1,036 | 36.20% | 27.66% | 10.68% | 25.85% | 19.09% | 8.67% | 17.15% | 7.25% |
+| `sunflower51-lora` | Stage-1 SunflowerASR-51 LoRA ($\le 30\text{s}$ only) | 1,036 | 28.83% | 25.62% | 8.84% | 24.80% | 16.98% | 6.96% | 16.13% | 6.28% |
+| `sunflower51-grpo` | Stage-2 Quality-Gated Semantic GRPO | 1,036 | 28.67% | 25.55% | 8.79% | 24.89% | 16.89% | 6.88% | 16.21% | 6.30% |
+| `sunflower51-lora-qc` | Stage-1 LoRA-QC (prior checkpoint) | 1,036 | 33.28% | 23.66% | 8.15% | 22.83% | 15.30% | 6.35% | 14.45% | 5.66% |
+| `sunflower51-lora-qc-v2` | **Best Single Model / Deploy:** QC + MMS_FA + rsLoRA (5 ep) | 1,036 | 33.49% | 24.11% | 8.13% | 23.36% | **14.60%** | **6.10%** | **13.82%** | **5.46%** |
+| `sunflower51-local-rover` | Local 3-Checkpoint ROVER (LoRA-QC + LoRA + GRPO) | 1,036 | 32.99% | **23.37%** | **8.08%** | **22.54%** | 15.19% | 6.32% | 14.33% | 5.63% |
+| `sunflower51-lora-qc-gemma-mbr` | LoRA-QC + 5-Beam Gemma-MBR (test-time) | 1,036 | 33.60% | 24.25% | 8.19% | 23.59% | 14.98% | 6.20% | 14.28% | 5.62% |
+| `fusion-lora-qc-gemini-turbo` | **Best Overall:** 3-Model LLM Fusion + ASR Fallback | 1,028 | 29.27% | **21.48%** | 8.16% | **20.80%** | **13.21%** | 6.20% | **12.53%** | 5.63% |
 
 ---
 
@@ -42,40 +42,40 @@ By systematically addressing each bottleneck, our experimentation achieved:
 
 ### 3.1 Breakdown by Audio Duration (`breakdown_by_duration.csv`)
 
-Over 27.7% of test clips exceed Whisper's 30-second window. Recovering $>30\text{s}$ training clips via `MMS_FA` forced alignment and applying overlap-VAD + LCS stitching at inference time produces the largest single-model gain on long recordings (-2.61 pp from `21.83%` to `19.22%` Fair WER). Short clips ($\le 15\text{s}$) reach **12.33%** single-model Fair WER (**10.96%** with Fusion).
+Over 27.7% of test clips exceed Whisper's 30-second window. Recovering $>30\text{s}$ training clips via `MMS_FA` forced alignment and applying overlap-VAD + LCS stitching at inference time produces the largest single-model gain on long recordings (Stage-1 LoRA $20.10\%$ $\rightarrow$ LoRA-QC-v2 **$17.12\%$** Fair WER). Short clips ($\le 15\text{s}$) reach **10.06%** single-model Fair WER with `lora-qc-v2` (**9.41%** with Fusion).
 
-| Duration Bucket | $n$ | Share | Whisper-Turbo | Gemini 2.5 Flash | Stage-1 LoRA (30s) | Stage-2 GRPO | LoRA-QC (FullAudio) | LoRA-QC + Gemma-MBR | Local-ROVER | 3-Model Fusion |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **$\le 15\text{s}$ (short)** | 300 | 29.0% | 17.94% | 18.31% | 14.02% | 13.09% | 12.47% | **12.33%** | 12.42% | **10.96%** |
-| **$15\text{–}30\text{s}$ (medium)** | 449 | 43.3% | 20.33% | 17.78% | 15.93% | 15.77% | 14.78% | **14.53%** | 14.78% | **12.83%** |
-| **$>30\text{s}$ (long audio)** | 287 | 27.7% | 27.99% | 23.12% | 21.83% | 21.98% | 19.60% | **19.22%** | 19.35% | **17.39%** |
+| Duration Bucket | $n$ | Share | Whisper-Turbo | Gemini 2.5 Flash | Stage-1 LoRA (30s) | Stage-2 GRPO | LoRA-QC (FullAudio) | **LoRA-QC-v2 (Deploy)** | LoRA-QC + Gemma-MBR | Local-ROVER | 3-Model Fusion |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **$\le 15\text{s}$ (short)** | 300 | 29.0% | 14.74% | 16.80% | 12.55% | 11.51% | 10.90% | 10.06% | 10.71% | 10.85% | **9.41%** |
+| **$15\text{–}30\text{s}$ (medium)** | 449 | 43.3% | 18.24% | 16.43% | 14.30% | 14.24% | 13.29% | 12.77% | 13.06% | 13.27% | **11.39%** |
+| **$>30\text{s}$ (long audio)** | 287 | 27.7% | 25.96% | 21.64% | 20.10% | 20.24% | 17.92% | 17.12% | 17.50% | 17.72% | **15.53%** |
 
 ### 3.2 Breakdown by Speaker L1 Substrate (`breakdown_by_l1_language.csv`)
 
-While all interviews are in Swahili, 59% of respondents speak an indigenous Bantu or South Cushitic (`Kiiraq`) first language. Zero-shot `gemini-2.5-flash` suffers catastrophic repetition hallucinations on `Kizigua` L1 speakers (**40.89%** Fair WER), whereas `LoRA-QC + Gemma-MBR` halves Kizigua error to **20.35%** (**17.67%** with Fusion).
+While all interviews are in Swahili, 59% of respondents speak an indigenous Bantu or South Cushitic (`Kiiraq`) first language. Zero-shot `gemini-2.5-flash` still suffers catastrophic repetition hallucinations on `Kizigua` L1 speakers (**39.34%** Fair WER), whereas `lora-qc-v2` cuts Kizigua error to **19.45%** (**15.98%** with Fusion).
 
-| Speaker L1 | Language Family | $n$ | Whisper-Turbo | Gemini 2.5 Flash | Stage-1 LoRA (30s) | Stage-2 GRPO | LoRA-QC (FullAudio) | LoRA-QC + Gemma-MBR | Local-ROVER | 3-Model Fusion |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **Kiswahili** | Bantu (Sabaki G42) | 425 | 22.95% | 18.86% | 17.76% | 17.66% | 15.83% | **15.53%** | 15.61% | **13.96%** |
-| **Kikagulu** | Bantu (East Ruvu G12) | 282 | 25.07% | 20.21% | 19.65% | 18.96% | 18.13% | **17.77%** | 18.07% | **16.51%** |
-| **Kiiraq (Iraqw)** | South Cushitic | 97 | 22.83% | 20.60% | 19.29% | 19.07% | 17.76% | 18.12% | **17.74%** | **14.99%** |
-| **Kichaga** | Bantu (Chaga E60) | 93 | 24.14% | 17.98% | 17.47% | 17.22% | 16.06% | 16.17% | **15.98%** | **13.58%** |
-| **Kizigua** | Bantu (Seuta G31) | 50 | 31.02% | 40.89% | 24.28% | 26.65% | 22.11% | **20.35%** | 22.07% | **17.67%** |
-| **Kinguu** | Bantu (Seuta G34) | 31 | 18.45% | 16.82% | 15.19% | 15.83% | 13.48% | **12.99%** | 13.13% | **12.90%** |
-| **Unknown** | Unspecified | 27 | 25.45% | 20.54% | 17.96% | 18.60% | **17.05%** | **17.05%** | **17.05%** | **16.54%** |
-| **Kipare** | Bantu (Pare G22) | 19 | 13.44% | 12.03% | 11.79% | 11.08% | **9.67%** | 9.91% | **9.67%** | **8.25%** |
-| **Kimeru** | Bantu (Chaga-Meru E61) | 12 | 26.83% | 20.98% | 19.51% | 17.56% | 16.10% | **15.61%** | 16.10% | **15.61%** |
+| Speaker L1 | Language Family | $n$ | Whisper-Turbo | Gemini 2.5 Flash | Stage-1 LoRA (30s) | Stage-2 GRPO | LoRA-QC (FullAudio) | **LoRA-QC-v2 (Deploy)** | LoRA-QC + Gemma-MBR | Local-ROVER | 3-Model Fusion |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **Kiswahili** | Bantu (Sabaki G42) | 425 | 21.00% | 17.77% | 16.34% | 16.22% | 14.44% | 13.80% | 14.15% | 14.26% | **12.63%** |
+| **Kikagulu** | Bantu (East Ruvu G12) | 282 | 22.57% | 18.13% | 17.32% | 16.72% | 16.03% | 15.13% | 15.65% | 15.97% | **13.61%** |
+| **Kiiraq (Iraqw)** | South Cushitic | 97 | 21.24% | 19.69% | 17.94% | 17.85% | 16.51% | 16.53% | 16.81% | 16.49% | **14.83%** |
+| **Kichaga** | Bantu (Chaga E60) | 93 | 21.01% | 15.48% | 15.41% | 15.08% | 13.87% | 12.74% | 13.91% | 13.84% | **11.44%** |
+| **Kizigua** | Bantu (Seuta G31) | 50 | 28.44% | 39.34% | 22.81% | 25.20% | 20.46% | 19.45% | 18.76% | 20.50% | **15.98%** |
+| **Kinguu** | Bantu (Seuta G34) | 31 | 16.88% | 16.03% | 14.53% | 15.10% | 12.54% | 12.61% | 12.11% | 12.39% | **12.06%** |
+| **Unknown** | Unspecified | 27 | 22.24% | 19.38% | 17.04% | 17.30% | 15.86% | **14.56%** | 15.47% | 15.73% | 15.34% |
+| **Kipare** | Bantu (Pare G22) | 19 | 11.88% | 11.40% | 11.16% | 10.93% | 9.74% | 8.08% | 9.74% | 9.74% | **7.60%** |
+| **Kimeru** | Bantu (Chaga-Meru E61) | 12 | 20.00% | 19.51% | 17.07% | 15.12% | 14.15% | **12.68%** | 13.66% | 13.66% | 13.66% |
 
 ### 3.3 Breakdown by Administrative District (`breakdown_by_district.csv`)
 
-| District | Region / Primary L1s | $n$ | Whisper-Turbo | Gemini 2.5 Flash | Stage-1 LoRA (30s) | Stage-2 GRPO | LoRA-QC (FullAudio) | LoRA-QC + Gemma-MBR | Local-ROVER | 3-Model Fusion |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **Gairo** | Morogoro (Kikagulu / Kiswahili) | 431 | 22.90% | 18.80% | 17.24% | 16.85% | 16.12% | **15.78%** | 15.99% | **14.48%** |
-| **Hai** | Kilimanjaro (Kichaga / Kiswahili) | 179 | 25.24% | 20.49% | 19.07% | 18.74% | 17.40% | 17.28% | **17.18%** | **14.80%** |
-| **Kilindi** | Tanga (Kizigua / Kinguu) | 153 | 23.94% | 24.39% | 19.94% | 20.66% | 17.92% | **16.84%** | 17.85% | **15.55%** |
-| **Babati** | Manyara (Kiiraq / Kiswahili) | 138 | 23.87% | 20.89% | 19.97% | 19.66% | 17.10% | 17.29% | **16.93%** | **15.63%** |
-| **Meru** | Arusha (Kimeru / Kiswahili) | 87 | 27.41% | 20.29% | 19.47% | 19.50% | 17.53% | 17.33% | **17.30%** | **15.74%** |
-| **Mbulu** | Manyara (Kiiraq) | 48 | 22.24% | 18.86% | 17.88% | 17.92% | **16.17%** | 16.62% | **16.17%** | **12.38%** |
+| District | Region / Primary L1s | $n$ | Whisper-Turbo | Gemini 2.5 Flash | Stage-1 LoRA (30s) | Stage-2 GRPO | LoRA-QC (FullAudio) | **LoRA-QC-v2 (Deploy)** | LoRA-QC + Gemma-MBR | Local-ROVER | 3-Model Fusion |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **Gairo** | Morogoro (Kikagulu / Kiswahili) | 431 | 20.55% | 17.14% | 15.28% | 14.92% | 14.25% | 13.47% | 13.91% | 14.15% | **12.21%** |
+| **Hai** | Kilimanjaro (Kichaga / Kiswahili) | 179 | 22.75% | 18.60% | 17.48% | 17.17% | 15.73% | 14.54% | 15.49% | 15.54% | **13.17%** |
+| **Kilindi** | Tanga (Kizigua / Kinguu) | 153 | 21.82% | 23.06% | 18.34% | 19.11% | 16.42% | 15.58% | 15.38% | 16.41% | **13.57%** |
+| **Babati** | Manyara (Kiiraq / Kiswahili) | 138 | 21.75% | 19.68% | 18.25% | 17.92% | 15.50% | 14.93% | 15.73% | 15.34% | **14.42%** |
+| **Meru** | Arusha (Kimeru / Kiswahili) | 87 | 25.13% | 19.43% | 18.57% | 18.67% | 16.56% | 16.26% | 16.29% | 16.33% | **14.88%** |
+| **Mbulu** | Manyara (Kiiraq) | 48 | 21.30% | 18.35% | 17.12% | 17.08% | 15.44% | 16.02% | 15.77% | 15.44% | **13.36%** |
 
 ---
 
@@ -117,16 +117,16 @@ While all interviews are in Swahili, 59% of respondents speak an indigenous Bant
 \toprule
 \textbf{System} & \textbf{Adaptation / Decoding Regime} & \textbf{Legacy WER} & \textbf{Fixed WER} & \textbf{Fixed CER} & \textbf{Fair WER} & \textbf{Fair CER} & \textbf{Fair Clean WER} \\
 \midrule
-\texttt{ndizi-whisper-turbo} & Prior domain Whisper-v3-Turbo & 35.94 & 32.00 & 11.52 & 23.86 & 9.86 & 22.87 \\
-\texttt{gemini-2.5-flash} & Zero-shot multimodal LLM & 36.20 & 27.66 & 10.68 & 20.53 & 8.96 & 18.61 \\
-\texttt{sunflower51-lora} & Stage-1 LoRA ($\le 30$s train only) & 28.83 & 25.62 & 8.84 & 18.64 & 7.25 & 17.80 \\
-\texttt{sunflower51-grpo} & Stage-2 Quality-Gated Semantic GRPO & 28.67 & 25.55 & 8.79 & 18.53 & 7.18 & 17.86 \\
-\texttt{sunflower51-lora-qc} & Stage-1 LoRA + QC + MMS\_FA (prior) & 33.28 & 23.66 & 8.15 & 16.90 & 6.64 & 16.05 \\
-\texttt{sunflower51-lora-qc-v2} & Stage-1 LoRA-QC v2 (5 epochs, deploy) & 33.49 & 24.11 & 8.13 & \textbf{16.33} & \textbf{6.40} & \textbf{15.56} \\
-\texttt{sunflower51-local-rover} & 3-Checkpoint ROVER (LoRA-QC+LoRA+GRPO) & 32.99 & \textbf{23.37} & \textbf{8.08} & 16.76 & 6.60 & 15.91 \\
-\texttt{sunflower51-lora-qc-gemma-mbr} & LoRA-QC + Overlap-VAD LCS + Gemma-MBR & 33.60 & 24.25 & 8.19 & 16.59 & 6.49 & 15.91 \\
+\texttt{ndizi-whisper-turbo} & Prior domain Whisper-v3-Turbo & 35.94 & 32.00 & 11.52 & 21.66 & 9.55 & 20.64 \\
+\texttt{gemini-2.5-flash} & Zero-shot multimodal LLM & 36.20 & 27.66 & 10.68 & 19.09 & 8.67 & 17.15 \\
+\texttt{sunflower51-lora} & Stage-1 LoRA ($\le 30$s train only) & 28.83 & 25.62 & 8.84 & 16.98 & 6.96 & 16.13 \\
+\texttt{sunflower51-grpo} & Stage-2 Quality-Gated Semantic GRPO & 28.67 & 25.55 & 8.79 & 16.89 & 6.88 & 16.21 \\
+\texttt{sunflower51-lora-qc} & Stage-1 LoRA + QC + MMS\_FA (prior) & 33.28 & 23.66 & 8.15 & 15.30 & 6.35 & 14.45 \\
+\texttt{sunflower51-lora-qc-v2} & Stage-1 LoRA-QC v2 (5 epochs, deploy) & 33.49 & 24.11 & 8.13 & \textbf{14.60} & \textbf{6.10} & \textbf{13.82} \\
+\texttt{sunflower51-local-rover} & 3-Checkpoint ROVER (LoRA-QC+LoRA+GRPO) & 32.99 & \textbf{23.37} & \textbf{8.08} & 15.19 & 6.32 & 14.33 \\
+\texttt{sunflower51-lora-qc-gemma-mbr} & LoRA-QC + Overlap-VAD LCS + Gemma-MBR & 33.60 & 24.25 & 8.19 & 14.98 & 6.20 & 14.28 \\
 \midrule
-\texttt{fusion-lora-qc-gemini-turbo} & 3-Model Cross-Family LLM Fusion ($n=1{,}028$) & 29.54 & \textbf{21.69} & 8.53 & \textbf{14.88} & 6.83 & \textbf{14.08} \\
+\texttt{fusion-lora-qc-gemini-turbo} & 3-Model Cross-Family LLM Fusion ($n=1{,}028$) & 29.27 & \textbf{21.48} & 8.16 & \textbf{13.21} & 6.20 & \textbf{12.53} \\
 \bottomrule
 \end{tabular}
 \end{table*}

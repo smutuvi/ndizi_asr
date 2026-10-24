@@ -718,15 +718,22 @@ def run_fusion(
                     list((choice0.get("message") or {}).keys()),
                 )
             # Fallback to primary ASR hypothesis if LLM editor returned empty string
-            if not (fusion_text or "").strip():
-                hyps_map = rec.get("hypotheses") or {}
-                for m in asr_models:
-                    cand_h = str(hyps_map.get(m) or "").strip()
-                    if cand_h:
-                        fusion_text = cand_h
-                        fusion_error = None
-                        logger.info("Fell back to primary ASR (%s) for %s", m, sid)
-                        break
+            # or severely truncated the transcript (<45% of primary ASR word count when >=8 words)
+            hyps_map = rec.get("hypotheses") or {}
+            primary_h = ""
+            for m in asr_models:
+                cand_h = str(hyps_map.get(m) or "").strip()
+                if cand_h:
+                    primary_h = cand_h
+                    break
+            if not (fusion_text or "").strip() or (
+                len(primary_h.split()) >= 8
+                and len((fusion_text or "").split()) < 0.45 * len(primary_h.split())
+            ):
+                if primary_h:
+                    fusion_text = primary_h
+                    fusion_error = None
+                    logger.info("Fell back to primary ASR for %s", sid)
             row = {
                 "sample_id": sid,
                 "dataset_id": rec.get("dataset_id"),
