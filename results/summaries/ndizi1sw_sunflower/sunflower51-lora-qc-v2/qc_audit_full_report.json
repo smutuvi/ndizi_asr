@@ -1,0 +1,363 @@
+{
+  "splits": [
+    {
+      "split": "train",
+      "total_before": 5593,
+      "total_after": 4029,
+      "filtered_out_count": 1564,
+      "kept_pct": 72.04,
+      "hours_before": 41.28,
+      "hours_after": 18.72,
+      "issues_identified": {
+        "glued_punctuation_repaired": 3646,
+        "duration_gt_30s_dropped": 1550,
+        "speech_rate_too_high_corrupted_or_paste": 8,
+        "speech_rate_too_low_truncated_or_silence": 10,
+        "empty_or_tiny_transcript": 3
+      },
+      "filtered_out_by_reason": {
+        "duration_gt_30s_dropped": 1550,
+        "speech_rate_too_high_corrupted_or_paste": 8,
+        "speech_rate_too_low_truncated_or_silence": 10,
+        "empty_or_tiny_transcript": 3
+      },
+      "stats_before": {
+        "duration_sec": {
+          "count": 5593,
+          "sum": 148590.77,
+          "mean": 26.57,
+          "median": 20.41,
+          "p5": 7.81,
+          "p95": 66.6,
+          "min": 1.19,
+          "max": 269.42
+        },
+        "word_count": {
+          "count": 5593,
+          "sum": 239014.0,
+          "mean": 42.73,
+          "median": 32.0,
+          "p5": 11.0,
+          "p95": 107.0,
+          "min": 1.0,
+          "max": 625.0
+        },
+        "chars_per_sec": {
+          "count": 5593,
+          "sum": 56573.53,
+          "mean": 10.12,
+          "median": 9.95,
+          "p5": 6.21,
+          "p95": 14.32,
+          "min": 0.78,
+          "max": 169.76
+        },
+        "languages": {
+          "Kiswahili": 1860,
+          "Kiiraq": 645,
+          "unknown": 1285,
+          "Kimeru": 67,
+          "Kikagulu": 1001,
+          "Kizigua": 210,
+          "Kinguu": 201,
+          "Kimasai": 38,
+          "Kichaga": 174,
+          "Kirangi": 23,
+          "Kimwasi": 21,
+          "Kiarusha": 23,
+          "Kikamba": 6,
+          "Kichasi": 21,
+          "Kihehe": 18
+        }
+      },
+      "stats_remaining": {
+        "duration_sec": {
+          "count": 4029,
+          "sum": 67405.61,
+          "mean": 16.73,
+          "median": 16.2,
+          "p5": 7.32,
+          "p95": 28.08,
+          "min": 1.19,
+          "max": 29.95
+        },
+        "word_count": {
+          "count": 4029,
+          "sum": 110980.0,
+          "mean": 27.55,
+          "median": 26.0,
+          "p5": 10.0,
+          "p95": 50.0,
+          "min": 2.0,
+          "max": 82.0
+        },
+        "chars_per_sec": {
+          "count": 4029,
+          "sum": 40947.52,
+          "mean": 10.16,
+          "median": 10.03,
+          "p5": 6.29,
+          "p95": 14.51,
+          "min": 2.67,
+          "max": 23.52
+        },
+        "languages": {
+          "Kiswahili": 1312,
+          "Kimeru": 62,
+          "unknown": 992,
+          "Kikagulu": 669,
+          "Kiiraq": 424,
+          "Kizigua": 174,
+          "Kinguu": 145,
+          "Kimasai": 31,
+          "Kichaga": 160,
+          "Kiarusha": 19,
+          "Kikamba": 6,
+          "Kirangi": 16,
+          "Kihehe": 16,
+          "Kichasi": 2,
+          "Kimwasi": 1
+        },
+        "districts": {
+          "Hai": 688,
+          "Meru": 254,
+          "Kilindi": 771,
+          "unknown": 484,
+          "Mbulu": 277,
+          "Babati": 614,
+          "Gairo": 941
+        }
+      }
+    },
+    {
+      "split": "validation",
+      "total_before": 1163,
+      "total_after": 810,
+      "filtered_out_count": 353,
+      "kept_pct": 69.65,
+      "hours_before": 9.16,
+      "hours_after": 3.75,
+      "issues_identified": {
+        "glued_punctuation_repaired": 760,
+        "duration_gt_30s_dropped": 348,
+        "speech_rate_too_high_corrupted_or_paste": 2,
+        "speech_rate_too_low_truncated_or_silence": 7
+      },
+      "filtered_out_by_reason": {
+        "duration_gt_30s_dropped": 348,
+        "speech_rate_too_high_corrupted_or_paste": 2,
+        "speech_rate_too_low_truncated_or_silence": 7
+      },
+      "stats_before": {
+        "duration_sec": {
+          "count": 1163,
+          "sum": 32981.99,
+          "mean": 28.36,
+          "median": 21.06,
+          "p5": 7.74,
+          "p95": 76.39,
+          "min": 3.96,
+          "max": 255.78
+        },
+        "word_count": {
+          "count": 1163,
+          "sum": 52061.0,
+          "mean": 44.76,
+          "median": 32.0,
+          "p5": 11.0,
+          "p95": 119.0,
+          "min": 3.0,
+          "max": 479.0
+        },
+        "chars_per_sec": {
+          "count": 1163,
+          "sum": 11437.02,
+          "mean": 9.83,
+          "median": 9.71,
+          "p5": 6.1,
+          "p95": 13.85,
+          "min": 0.25,
+          "max": 42.96
+        },
+        "languages": {
+          "Kiswahili": 346,
+          "Kikagulu": 282,
+          "Kiiraq": 168,
+          "Kizigua": 50,
+          "unknown": 221,
+          "Kichaga": 41,
+          "Kimeru": 12,
+          "Kinguu": 19,
+          "Kikamba": 6,
+          "Kipare": 18
+        }
+      },
+      "stats_remaining": {
+        "duration_sec": {
+          "count": 810,
+          "sum": 13514.89,
+          "mean": 16.69,
+          "median": 16.2,
+          "p5": 7.34,
+          "p95": 28.08,
+          "min": 4.25,
+          "max": 29.95
+        },
+        "word_count": {
+          "count": 810,
+          "sum": 21371.0,
+          "mean": 26.38,
+          "median": 25.0,
+          "p5": 10.0,
+          "p95": 49.0,
+          "min": 5.0,
+          "max": 97.0
+        },
+        "chars_per_sec": {
+          "count": 810,
+          "sum": 7899.55,
+          "mean": 9.75,
+          "median": 9.57,
+          "p5": 6.16,
+          "p95": 13.89,
+          "min": 3.91,
+          "max": 22.8
+        },
+        "languages": {
+          "Kiswahili": 250,
+          "Kikagulu": 186,
+          "Kiiraq": 104,
+          "Kizigua": 27,
+          "unknown": 156,
+          "Kichaga": 36,
+          "Kimeru": 12,
+          "Kikamba": 6,
+          "Kipare": 17,
+          "Kinguu": 16
+        },
+        "districts": {
+          "Hai": 95,
+          "Gairo": 183,
+          "Kilindi": 180,
+          "Mbulu": 63,
+          "Babati": 140,
+          "unknown": 102,
+          "Meru": 47
+        }
+      }
+    },
+    {
+      "split": "test",
+      "total_before": 1036,
+      "total_after": 749,
+      "filtered_out_count": 287,
+      "kept_pct": 72.3,
+      "hours_before": 7.39,
+      "hours_after": 3.68,
+      "issues_identified": {
+        "glued_punctuation_repaired": 783,
+        "duration_gt_30s_dropped": 287,
+        "speech_rate_too_low_truncated_or_silence": 1
+      },
+      "filtered_out_by_reason": {
+        "duration_gt_30s_dropped": 287,
+        "speech_rate_too_low_truncated_or_silence": 1
+      },
+      "stats_before": {
+        "duration_sec": {
+          "count": 1036,
+          "sum": 26587.98,
+          "mean": 25.66,
+          "median": 21.38,
+          "p5": 9.0,
+          "p95": 55.74,
+          "min": 3.2,
+          "max": 187.85
+        },
+        "word_count": {
+          "count": 1036,
+          "sum": 44134.0,
+          "mean": 42.6,
+          "median": 34.0,
+          "p5": 13.0,
+          "p95": 96.0,
+          "min": 2.0,
+          "max": 402.0
+        },
+        "chars_per_sec": {
+          "count": 1036,
+          "sum": 10653.72,
+          "mean": 10.28,
+          "median": 10.22,
+          "p5": 6.66,
+          "p95": 13.78,
+          "min": 2.14,
+          "max": 18.0
+        },
+        "languages": {
+          "Kizigua": 50,
+          "Kiswahili": 425,
+          "Kikagulu": 282,
+          "Kiiraq": 97,
+          "Kichaga": 93,
+          "unknown": 27,
+          "Kipare": 19,
+          "Kinguu": 31,
+          "Kimeru": 12
+        }
+      },
+      "stats_remaining": {
+        "duration_sec": {
+          "count": 749,
+          "sum": 13234.46,
+          "mean": 17.67,
+          "median": 17.32,
+          "p5": 8.45,
+          "p95": 28.23,
+          "min": 3.2,
+          "max": 29.92
+        },
+        "word_count": {
+          "count": 749,
+          "sum": 21824.0,
+          "mean": 29.14,
+          "median": 28.0,
+          "p5": 11.4,
+          "p95": 50.0,
+          "min": 2.0,
+          "max": 75.0
+        },
+        "chars_per_sec": {
+          "count": 749,
+          "sum": 7669.24,
+          "mean": 10.24,
+          "median": 10.22,
+          "p5": 6.49,
+          "p95": 13.66,
+          "min": 2.87,
+          "max": 18.0
+        },
+        "languages": {
+          "Kizigua": 35,
+          "Kiswahili": 289,
+          "Kikagulu": 210,
+          "Kiiraq": 55,
+          "Kichaga": 85,
+          "unknown": 23,
+          "Kipare": 19,
+          "Kinguu": 21,
+          "Kimeru": 12
+        },
+        "districts": {
+          "Kilindi": 90,
+          "Babati": 94,
+          "Gairo": 328,
+          "Mbulu": 19,
+          "Hai": 151,
+          "Meru": 67
+        }
+      }
+    }
+  ],
+  "rescored_predictions": []
+}

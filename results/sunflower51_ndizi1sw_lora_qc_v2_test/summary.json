@@ -1,0 +1,85 @@
+{
+  "experiment_name": "sunflower51_ndizi1sw_lora_qc_v2_test",
+  "created_at": "20261024T064420Z",
+  "dataset": {
+    "type": "huggingface",
+    "dataset_id": "google/fleurs",
+    "config_name": null,
+    "split": "test",
+    "languages": {},
+    "sources": [
+      {
+        "dataset_id": "smutuvi/ndizi-1-sw",
+        "split": "test",
+        "config_name": null,
+        "language": "swahili",
+        "audio_column": "audio",
+        "text_column": "transcript",
+        "id_column": null,
+        "max_samples": null,
+        "revision": null,
+        "trust_remote_code": null,
+        "load_kwargs": {}
+      }
+    ],
+    "language": "swahili",
+    "audio_column": "audio",
+    "text_column": "transcript",
+    "id_column": null,
+    "max_samples": null,
+    "streaming": true,
+    "revision": null,
+    "trust_remote_code": false,
+    "load_kwargs": {},
+    "csv_path": null,
+    "data_root": null,
+    "language_filter": [],
+    "cropconcept_media_map": null,
+    "cropconcept_transcripts": null,
+    "cropconcept_audio_dir": null,
+    "cropconcept_include_not_counted": false
+  },
+  "models": {
+    "hf:outputs/sunflower51_ndizi1sw_lora_qc_v2/merged": {
+      "model": "hf:outputs/sunflower51_ndizi1sw_lora_qc_v2/merged",
+      "backend": "hf_whisper",
+      "model_id": "outputs/sunflower51_ndizi1sw_lora_qc_v2/merged",
+      "overall": {
+        "num_samples": 1036,
+        "num_scored": 1036,
+        "num_errors": 0,
+        "wer": 0.366995611376476,
+        "cer": 0.10317910158632218,
+        "wer_normalized": 0.16326434619002822,
+        "cer_normalized": 0.06396436525612473,
+        "mean_latency_seconds": 1.006824320570555
+      },
+      "per_language": {
+        "swahili": {
+          "num_samples": 1036,
+          "num_scored": 1036,
+          "num_errors": 0,
+          "wer": 0.366995611376476,
+          "cer": 0.10317910158632218,
+          "wer_normalized": 0.16326434619002822,
+          "cer_normalized": 0.06396436525612473,
+          "mean_latency_seconds": 1.006824320570555
+        }
+      },
+      "per_dataset": {
+        "smutuvi/ndizi-1-sw": {
+          "num_samples": 1036,
+          "num_scored": 1036,
+          "num_errors": 0,
+          "wer": 0.366995611376476,
+          "cer": 0.10317910158632218,
+          "wer_normalized": 0.16326434619002822,
+          "cer_normalized": 0.06396436525612473,
+          "mean_latency_seconds": 1.006824320570555
+        }
+      },
+      "per_stratum": {},
+      "predictions_path": "results/sunflower51_ndizi1sw_lora_qc_v2_test/hf_outputs_sunflower51_ndizi1sw_lora_qc_v2_merged/predictions.jsonl"
+    }
+  }
+}
