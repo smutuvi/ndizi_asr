@@ -162,7 +162,33 @@ def _find_adapter_config(model_id: str, hf_token: Optional[str]) -> Optional[str
     return None
 
 
-def _chunk_audio(array: np.ndarray, sampling_rate: int, max_seconds: float = MAX_SECONDS) -> list[np.ndarray]:
+def _collapse_repetitions(text: str, max_run: int = 3) -> str:
+    """Collapse obvious word/char loops left after decode (matches ethiopia_asr_eval)."""
+    tokens = text.split()
+    if not tokens:
+        return text
+    out: list[str] = []
+    prev = None
+    run = 0
+    for tok in tokens:
+        if tok == prev:
+            run += 1
+            if run <= max_run:
+                out.append(tok)
+        else:
+            prev = tok
+            run = 1
+            out.append(tok)
+    return " ".join(out)
+
+
+def _chunk_audio(
+    array: np.ndarray,
+    sampling_rate: int,
+    max_seconds: float = MAX_SECONDS,
+    *,
+    pad_overlap_s: float = 0.35,
+) -> list[np.ndarray]:
     max_samples = int(max_seconds * sampling_rate)
     if len(array) <= max_samples:
         return [array]
@@ -173,6 +199,7 @@ def _chunk_audio(array: np.ndarray, sampling_rate: int, max_seconds: float = MAX
             np.asarray(array, dtype=np.float32),
             max_chunk_s=min(max_seconds, 28.0),
             sampling_rate=sampling_rate,
+            pad_overlap_s=pad_overlap_s,
         )
         if vad_chunks:
             return vad_chunks
@@ -421,15 +448,18 @@ class HuggingFaceWhisperClient:
         self.torch = torch
         self._gemma_helper: Optional[_GemmaMBRAndRAGHelper] = None
         self._is_peft = False
+        self._pending_adapter_id: Optional[str] = None
+        self._adapter_attached = False
         hf_token = token if token is not None else _hf_token()
-        # Keep PEFT adapters unmerged by default so non-Swahili languages can
-        # disable_adapter() and recover the frozen SunflowerASR-51 base.
+        # Keep PEFT adapters unmerged/lazy by default so non-Swahili languages run
+        # the untouched SunflowerASR-51 base model (0.00 pp degradation).
         if merge_lora is None:
             merge_lora = os.getenv("NDIZI_MERGE_LORA", "").strip().lower() in {
                 "1",
                 "true",
                 "yes",
             }
+        self._merge_lora = bool(merge_lora)
 
         if device:
             self.device = torch.device(device)
@@ -457,6 +487,7 @@ class HuggingFaceWhisperClient:
             resolved_dtype = torch.float16
         if resolved_dtype is None:
             resolved_dtype = torch.float32
+        self._resolved_dtype = resolved_dtype
 
         logger.info(
             "Loading Whisper model %s on %s (%s); hf_token=%s",
@@ -466,14 +497,13 @@ class HuggingFaceWhisperClient:
             "set" if hf_token else "missing",
         )
         load_kwargs = {"token": hf_token} if hf_token else {}
+        self._load_kwargs = load_kwargs
         try:
             from pathlib import Path
             import json
 
             adapter_id = _find_adapter_config(model_id, hf_token)
             if adapter_id is not None:
-                from peft import PeftModel
-
                 adapter_path = Path(adapter_id).expanduser()
                 if adapter_path.is_dir() and (adapter_path / "adapter_config.json").is_file():
                     adata = json.loads((adapter_path / "adapter_config.json").read_text(encoding="utf-8"))
@@ -485,32 +515,29 @@ class HuggingFaceWhisperClient:
                 base_id = str(
                     adata.get("base_model_name_or_path") or "Sunbird/SunflowerASR-51-african-languages"
                 )
-                # Prefer processor from the eval model_id (merged or adapter), else base.
-                processor_id = model_id
-                try:
-                    self.processor = WhisperProcessor.from_pretrained(processor_id, **load_kwargs)
-                except Exception:  # noqa: BLE001
-                    try:
-                        self.processor = WhisperProcessor.from_pretrained(adapter_id, **load_kwargs)
-                    except Exception:  # noqa: BLE001
-                        self.processor = WhisperProcessor.from_pretrained(base_id, **load_kwargs)
+                # Always load processor from base_id so tokenizer prefix_tokens are clean
+                self.processor = WhisperProcessor.from_pretrained(base_id, **load_kwargs)
                 base_model = WhisperForConditionalGeneration.from_pretrained(
                     base_id,
                     torch_dtype=resolved_dtype,
                     **load_kwargs,
                 )
-                peft_model = PeftModel.from_pretrained(base_model, adapter_id, **load_kwargs)
-                if merge_lora:
-                    logger.info("Merging LoRA adapter %s into base %s (NDIZI_MERGE_LORA)", adapter_id, base_id)
+                if self._merge_lora:
+                    from peft import PeftModel
+
+                    logger.info("Merging LoRA adapter %s into base %s (NDIZI_MERGE_LORA=1)", adapter_id, base_id)
+                    peft_model = PeftModel.from_pretrained(base_model, adapter_id, **load_kwargs)
                     self.model = peft_model.merge_and_unload().to(self.device)
-                    self._is_peft = False
+                    self._adapter_attached = True
                 else:
                     logger.info(
-                        "Keeping PEFT adapter %s on base %s (language-route: Swahili only)",
-                        adapter_id,
+                        "Loaded frozen base %s with lazy Swahili PEFT adapter %s "
+                        "(adapter attaches only when language=Swahili; non-Swahili runs pure base)",
                         base_id,
+                        adapter_id,
                     )
-                    self.model = peft_model.to(self.device)
+                    self.model = base_model.to(self.device)
+                    self._pending_adapter_id = adapter_id
                     self._is_peft = True
             else:
                 self.processor = WhisperProcessor.from_pretrained(model_id, **load_kwargs)
@@ -521,10 +548,9 @@ class HuggingFaceWhisperClient:
                 ).to(self.device)
                 if _is_local_finetune(model_id) and "sunflower" in model_id.lower():
                     logger.warning(
-                        "Loaded merged Sunflower fine-tune %s without a PEFT adapter. "
-                        "Non-Swahili languages (e.g. Oromo) will show LoRA-merge degrade; "
-                        "point NDIZI_PEFT_ADAPTER at the unmerged adapter (or Hub adapter repo) "
-                        "for disable_adapter() language routing back to the frozen base.",
+                        "Loaded statically merged Sunflower fine-tune %s without a PEFT adapter. "
+                        "Non-Swahili languages (e.g. Oromo) will show static-merge degrade; "
+                        "use the unmerged adapter directory (or set NDIZI_PEFT_ADAPTER) for 0pp degrade.",
                         model_id,
                     )
         except Exception as exc:  # noqa: BLE001
@@ -540,36 +566,65 @@ class HuggingFaceWhisperClient:
                 getattr(getattr(self.model, "config", None), "_name_or_path", "") or model_id
             )
         )
-        # PEFT on Sunflower base is always a Sunbird decoder for language tokens.
         if self._is_peft:
             self._sunbird = True
         self._local_ft = _is_local_finetune(model_id) or self._is_peft
-        if hasattr(self.model, "config") and self.model.config is not None:
-            self.model.config.forced_decoder_ids = None
-        if hasattr(self.model, "generation_config") and self.model.generation_config is not None:
-            # Clear language/task/forced_decoder_ids on generation_config so explicit
-            # forced_decoder_ids in .generate() always uses the requested eval language.
-            self.model.generation_config.language = None
-            self.model.generation_config.task = None
-            self.model.generation_config.forced_decoder_ids = None
+        self._clear_forced_generation_config(self.model)
         self._transcribe_tok = self.processor.tokenizer.convert_tokens_to_ids("<|transcribe|>")
         self._notimestamps_tok = self.processor.tokenizer.convert_tokens_to_ids("<|notimestamps|>")
         if self.gemma_mbr or self.rag_prompt:
             self._gemma_helper = _GemmaMBRAndRAGHelper(device=str(self.device))
 
+    @staticmethod
+    def _clear_forced_generation_config(model_obj: object) -> None:
+        for target in (
+            model_obj,
+            getattr(model_obj, "base_model", None),
+            getattr(getattr(model_obj, "base_model", None), "model", None),
+        ):
+            if target is None:
+                continue
+            cfg = getattr(target, "config", None)
+            if cfg is not None:
+                cfg.forced_decoder_ids = None
+            gcfg = getattr(target, "generation_config", None)
+            if gcfg is not None:
+                gcfg.language = None
+                gcfg.task = None
+                gcfg.forced_decoder_ids = None
+
     def _adapter_cm(self, language: Optional[str], language_config: Optional[str]):
-        """Enable Ndizi LoRA only for Swahili; otherwise run frozen Sunflower base."""
+        """Attach/enable Ndizi LoRA only for Swahili; keep pure frozen base for all other languages."""
         from contextlib import nullcontext
 
         if not self._is_peft:
             return nullcontext()
         if _is_swahili_language(language, language_config):
+            if self._pending_adapter_id is not None and not self._adapter_attached:
+                from peft import PeftModel
+
+                logger.info(
+                    "Attaching & merging Swahili PEFT adapter %s for language=%r",
+                    self._pending_adapter_id,
+                    language or language_config,
+                )
+                peft_model = PeftModel.from_pretrained(
+                    self.model,
+                    self._pending_adapter_id,
+                    **self._load_kwargs,
+                )
+                self.model = peft_model.merge_and_unload().to(self.device)
+                self.model.eval()
+                self._clear_forced_generation_config(self.model)
+                self._adapter_attached = True
+                self._pending_adapter_id = None
             return nullcontext()
-        logger.info(
-            "PEFT language-route: disable_adapter() for language=%r (base SunflowerASR-51)",
-            language or language_config,
-        )
-        return self.model.disable_adapter()
+        # Non-Swahili request: if adapter was never attached, self.model is already pure base_model!
+        if not self._adapter_attached:
+            return nullcontext()
+        if hasattr(self.model, "disable_adapter"):
+            return self.model.disable_adapter()
+        return nullcontext()
 
     def _forced_decoder_ids(
         self,
@@ -603,17 +658,28 @@ class HuggingFaceWhisperClient:
     ) -> TranscriptionResult:
         started = time.perf_counter()
         try:
-            from ..audio import join_chunk_transcripts
+            from ..audio import collapse_repetition_loops, join_chunk_transcripts
             from ..ethio_normalize import clean_swahili_training_target
 
+            is_swahili = _is_swahili_language(language, language_config)
             forced = self._forced_decoder_ids(language, language_config)
             audio = _resample_linear(np.asarray(audio_array), int(sampling_rate), SAMPLE_RATE)
             if audio.ndim > 1:
                 audio = audio.mean(axis=-1)
             texts: list[str] = []
             prev_chunk_tail: str = ""
+            # Match ethiopia_asr_eval/models/whisper.py (20s zero-overlap VAD chunks)
+            # on non-Swahili African languages (Oromo/Amharic) to prevent >20s Whisper
+            # repetition loops; keep 30s/0.35s overlap-VAD + LCS stitch for Swahili.
+            chunk_max_s = MAX_SECONDS if is_swahili else 20.0
+            pad_overlap = 0.35 if is_swahili else 0.0
             with self._adapter_cm(language, language_config):
-                for chunk in _chunk_audio(audio, SAMPLE_RATE):
+                for chunk in _chunk_audio(
+                    audio,
+                    SAMPLE_RATE,
+                    max_seconds=chunk_max_s,
+                    pad_overlap_s=pad_overlap,
+                ):
                     chunk_txt = self._transcribe_chunk(
                         chunk,
                         forced,
@@ -622,8 +688,12 @@ class HuggingFaceWhisperClient:
                     if chunk_txt.strip():
                         texts.append(chunk_txt.strip())
                         prev_chunk_tail = " ".join(chunk_txt.strip().split()[-18:])
-            text = join_chunk_transcripts(texts)
-            if self.canonicalize_output and text:
+            if is_swahili:
+                text = join_chunk_transcripts(texts)
+            else:
+                joined = " ".join(collapse_repetition_loops(p.strip()) for p in texts if p.strip())
+                text = collapse_repetition_loops(joined)
+            if self.canonicalize_output and text and is_swahili:
                 text = clean_swahili_training_target(text)
             return TranscriptionResult(
                 text=text,
@@ -647,16 +717,11 @@ class HuggingFaceWhisperClient:
         prev_context: str = "",
     ) -> str:
         torch = self.torch
-        # Match whisper_trainer.py feature extraction (do_normalize=False by default)
-        # on Swahili local/Ndizi fine-tunes; use do_normalize=True for non-Swahili
-        # languages and zero-shot Sunbird hub models so out-of-domain African languages
-        # receive standard normalized log-Mel spectrograms.
+        # Always respect processor.feature_extractor.do_normalize (False on Whisper /
+        # Sunbird-51). Setting do_normalize=True zero-means silent/quiet chunks and
+        # amplifies background noise before STFT.
         is_swahili_tok = any(tok_id == 50318 for _, tok_id in (forced_decoder_ids or []))
-        do_norm = (
-            bool(getattr(self.processor.feature_extractor, "do_normalize", False))
-            if (self._local_ft and is_swahili_tok)
-            else True
-        )
+        do_norm = bool(getattr(self.processor.feature_extractor, "do_normalize", False))
         inputs = self.processor(
             audio,
             sampling_rate=SAMPLE_RATE,
@@ -665,9 +730,9 @@ class HuggingFaceWhisperClient:
         )
         input_features = inputs.input_features.to(self.device, dtype=self.model.dtype)
 
-        # Optional Pass-1 RAG prompt lookup via EmbeddingGemma
+        # Optional Pass-1 RAG prompt lookup via EmbeddingGemma (Swahili only)
         prompt_ids_tensor = None
-        if self.rag_prompt and self._gemma_helper is not None and self._gemma_helper.available:
+        if is_swahili_tok and self.rag_prompt and self._gemma_helper is not None and self._gemma_helper.available:
             with torch.inference_mode():
                 draft_ids = self.model.generate(
                     input_features,
@@ -687,16 +752,29 @@ class HuggingFaceWhisperClient:
                 except Exception:  # noqa: BLE001
                     prompt_ids_tensor = None
 
-        gen_kwargs: dict = dict(
-            forced_decoder_ids=forced_decoder_ids,
-            max_new_tokens=256,
-            num_beams=self.num_beams,
-            do_sample=False,
-        )
-        if prompt_ids_tensor is not None:
-            gen_kwargs["prompt_ids"] = prompt_ids_tensor
+        if self._sunbird and not is_swahili_tok:
+            # Exact ethiopia_asr_eval/models/whisper.py anti-hallucination settings
+            # for Oromo / Amharic / non-Swahili African languages.
+            if hasattr(self.model, "generation_config") and self.model.generation_config is not None:
+                self.model.generation_config.max_length = None
+            gen_kwargs: dict = dict(
+                forced_decoder_ids=forced_decoder_ids,
+                max_new_tokens=224,
+                num_beams=self.num_beams,
+                do_sample=False,
+                repetition_penalty=1.2,
+            )
+        else:
+            gen_kwargs = dict(
+                forced_decoder_ids=forced_decoder_ids,
+                max_new_tokens=256,
+                num_beams=self.num_beams,
+                do_sample=False,
+            )
+            if prompt_ids_tensor is not None:
+                gen_kwargs["prompt_ids"] = prompt_ids_tensor
 
-        if self.gemma_mbr and self.num_beams > 1 and self._gemma_helper is not None:
+        if is_swahili_tok and self.gemma_mbr and self.num_beams > 1 and self._gemma_helper is not None:
             n_ret = min(self.num_beams, 6)
             with torch.inference_mode():
                 out = self.model.generate(
@@ -730,4 +808,7 @@ class HuggingFaceWhisperClient:
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False,
         )
-        return texts[0] if texts else ""
+        raw_out = texts[0] if texts else ""
+        if self._sunbird and not is_swahili_tok:
+            return _collapse_repetitions(raw_out.strip())
+        return raw_out
