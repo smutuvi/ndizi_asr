@@ -131,6 +131,37 @@ def build_parser() -> argparse.ArgumentParser:
         description="Fine-tune Whisper or CTC ASR models (Ndizi MLOps).",
     )
     p.add_argument("--config", type=Path, required=True, help="YAML train config")
+    p.add_argument(
+        "--max-train-samples",
+        type=int,
+        default=None,
+        help=(
+            "Deterministic nested+stratified cap on training segments (applied AFTER "
+            "loading the cached QC+MMS_FA dataset). Auto-appends _n<N> to experiment_name "
+            "unless --experiment-name is explicitly set."
+        ),
+    )
+    p.add_argument(
+        "--min-train-steps",
+        type=int,
+        default=None,
+        help=(
+            "Minimum optimizer update steps when subsampling with --max-train-samples "
+            "(defaults to 400 when --max-train-samples is set so small subsets finish LoRA warmup)."
+        ),
+    )
+    p.add_argument(
+        "--experiment-name",
+        type=str,
+        default=None,
+        help="Override experiment_name from YAML config.",
+    )
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for deterministic nested subsampling (default: 42).",
+    )
     p.add_argument("--dry-run", action="store_true", help="Validate and write plan only")
     p.add_argument("-v", "--verbose", action="store_true")
     return p
@@ -155,6 +186,19 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
     raw = yaml.safe_load(args.config.read_text(encoding="utf-8")) or {}
     cfg = load_train_config(raw)
+    if args.seed is not None:
+        cfg.extra["seed"] = int(args.seed)
+    if args.max_train_samples is not None and int(args.max_train_samples) > 0:
+        n_cap = int(args.max_train_samples)
+        cfg.extra["max_train_samples"] = n_cap
+        if args.min_train_steps is None and "min_train_steps" not in cfg.extra:
+            cfg.extra["min_train_steps"] = 400
+        if args.experiment_name is None and not cfg.experiment_name.endswith(f"_n{n_cap}"):
+            cfg.experiment_name = f"{cfg.experiment_name}_n{n_cap}"
+    if args.min_train_steps is not None:
+        cfg.extra["min_train_steps"] = int(args.min_train_steps)
+    if args.experiment_name is not None:
+        cfg.experiment_name = str(args.experiment_name)
     result = run_train(cfg, dry_run=args.dry_run)
     print(json.dumps(result, indent=2, default=str))
     return 0

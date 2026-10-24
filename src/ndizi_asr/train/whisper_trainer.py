@@ -6,6 +6,7 @@ import inspect
 import logging
 import math
 import os
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -597,6 +598,52 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Could not save chunked dataset cache to %s: %s", cache_root, exc)
 
+    seed = int(cfg.extra.get("seed", 42))
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    max_train_samples = cfg.extra.get("max_train_samples")
+    full_train_count = len(train_ds)
+    if max_train_samples is not None and 0 < int(max_train_samples) < full_train_count:
+        n_cap = int(max_train_samples)
+        # Build a single deterministic, stratified global permutation so that for any
+        # N1 < N2, indices[:N1] is a strict subset of indices[:N2] while preserving the
+        # speaker L1 / district distribution at every sample budget.
+        strat_cols = [
+            c
+            for c in ("first_language", "l1_language", "district", "region")
+            if c in train_ds.column_names
+        ]
+        if strat_cols:
+            strata: Dict[tuple, List[int]] = {}
+            cols_data = {c: train_ds[c] for c in strat_cols}
+            for idx in range(full_train_count):
+                key = tuple(str(cols_data[c][idx] or "UNK").strip().lower() for c in strat_cols)
+                strata.setdefault(key, []).append(idx)
+        else:
+            strata = {("all",): list(range(full_train_count))}
+
+        rng = random.Random(seed)
+        ranked: List[tuple] = []
+        for key in sorted(strata.keys()):
+            bucket = list(strata[key])
+            rng.shuffle(bucket)
+            m = len(bucket)
+            for pos, idx in enumerate(bucket):
+                # Proportional rank (pos + 0.5) / m interleaves all strata evenly across prefixes
+                ranked.append(((pos + 0.5) / m, rng.random(), idx))
+        ranked.sort(key=lambda t: (t[0], t[1]))
+        selected_indices = [idx for _, _, idx in ranked[:n_cap]]
+        train_ds = train_ds.select(selected_indices)
+        logger.info(
+            "Subsampled train_ds via nested stratified permutation (seed=%d, strat_cols=%s): %d -> %d segments",
+            seed,
+            strat_cols or ["none"],
+            full_train_count,
+            len(train_ds),
+        )
+
     token = _hf_token()
     load_kw: Dict[str, Any] = {}
     if token:
@@ -794,11 +841,35 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
 
     eff_batch = max(1, int(cfg.per_device_train_batch_size) * int(cfg.gradient_accumulation_steps))
     steps_per_epoch = max(1, math.ceil(len(train_ds) / eff_batch))
+    effective_epochs = float(cfg.num_train_epochs)
+    min_train_steps = cfg.extra.get("min_train_steps")
+    max_epochs_cap = float(cfg.extra.get("max_scaled_epochs", 15.0))
+    if (
+        min_train_steps is not None
+        and int(min_train_steps) > 0
+        and (cfg.max_steps is None or int(cfg.max_steps) <= 0)
+    ):
+        needed_epochs = math.ceil(int(min_train_steps) / steps_per_epoch)
+        if needed_epochs > effective_epochs:
+            effective_epochs = min(max_epochs_cap, float(needed_epochs))
+            logger.info(
+                "Scaled num_train_epochs %.1f -> %.1f to satisfy min_train_steps=%d (steps_per_epoch=%d, n_train=%d)",
+                float(cfg.num_train_epochs),
+                effective_epochs,
+                int(min_train_steps),
+                steps_per_epoch,
+                len(train_ds),
+            )
     total_train_steps = (
         int(cfg.max_steps)
         if cfg.max_steps is not None and int(cfg.max_steps) > 0
-        else max(1, int(math.ceil(steps_per_epoch * float(cfg.num_train_epochs))))
+        else max(1, int(math.ceil(steps_per_epoch * effective_epochs)))
     )
+
+    # When small subsets scale up to >5 epochs, evaluate at ~5 evenly spaced step intervals
+    # instead of every tiny 16-step epoch so validation doesn't dominate wall-clock time.
+    use_step_eval = eval_ds is not None and effective_epochs > float(cfg.num_train_epochs)
+    eval_step_interval = max(25, total_train_steps // 5) if use_step_eval else cfg.save_steps
 
     arg_kw: Dict[str, Any] = dict(
         output_dir=out_dir,
@@ -809,13 +880,15 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
         learning_rate=cfg.learning_rate,
         warmup_ratio=cfg.warmup_ratio,
-        num_train_epochs=cfg.num_train_epochs,
+        num_train_epochs=effective_epochs,
         max_steps=-1 if cfg.max_steps is None else int(cfg.max_steps),
         fp16=use_fp16,
         bf16=use_bf16,
-        eval_strategy="epoch" if eval_ds is not None else "no",
-        save_strategy="epoch",
-        logging_steps=cfg.logging_steps,
+        eval_strategy="steps" if use_step_eval else ("epoch" if eval_ds is not None else "no"),
+        save_strategy="steps" if use_step_eval else "epoch",
+        eval_steps=eval_step_interval if use_step_eval else None,
+        save_steps=eval_step_interval if use_step_eval else cfg.save_steps,
+        logging_steps=min(cfg.logging_steps, max(5, total_train_steps // 10)),
         predict_with_generate=True,
         generation_max_length=min(label_max, 444),
         # Whisper + label_smoothing pops labels before forward; without decoder_input_ids
