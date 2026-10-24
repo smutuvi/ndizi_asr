@@ -121,6 +121,47 @@ def _is_local_finetune(model_id: str) -> bool:
     return "ndizi-whisper" in mid or "lora" in mid or "merged" in mid
 
 
+def _is_swahili_language(language: Optional[str], language_config: Optional[str]) -> bool:
+    """True when the eval request is Swahili (only then enable Ndizi LoRA adapters)."""
+    for candidate in (language, language_config):
+        if not candidate:
+            continue
+        key = str(candidate).strip().lower()
+        if key in {"swa", "sw", "swahili", "sw_ke", "swh"}:
+            return True
+        if _OPENAI_WHISPER_LANG.get(key) == "swahili":
+            return True
+    try:
+        return resolve_sunbird_language_code(language, language_config) == "swa"
+    except ValueError:
+        return False
+
+
+def _find_adapter_config(model_id: str, hf_token: Optional[str]) -> Optional[str]:
+    """Return a local path or Hub repo id that contains adapter_config.json, else None."""
+    from pathlib import Path
+    import json
+
+    override = os.getenv("NDIZI_PEFT_ADAPTER", "").strip()
+    candidates = [c for c in (override, model_id) if c]
+    for cand in candidates:
+        p = Path(cand).expanduser()
+        if p.is_dir() and (p / "adapter_config.json").is_file():
+            return str(p)
+        # Hub PEFT repo (adapter_config.json at repo root)
+        try:
+            from huggingface_hub import hf_hub_download
+
+            kw = {"token": hf_token} if hf_token else {}
+            path = hf_hub_download(cand, "adapter_config.json", **kw)
+            # Validate JSON so we don't treat random files as adapters.
+            json.loads(Path(path).read_text(encoding="utf-8"))
+            return cand
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
 def _chunk_audio(array: np.ndarray, sampling_rate: int, max_seconds: float = MAX_SECONDS) -> list[np.ndarray]:
     max_samples = int(max_seconds * sampling_rate)
     if len(array) <= max_samples:
@@ -359,6 +400,7 @@ class HuggingFaceWhisperClient:
         rag_prompt: bool = False,
         canonicalize_output: bool = False,
         token: Optional[str] = None,
+        merge_lora: Optional[bool] = None,
     ) -> None:
         try:
             import torch
@@ -378,7 +420,16 @@ class HuggingFaceWhisperClient:
             self.num_beams = 5
         self.torch = torch
         self._gemma_helper: Optional[_GemmaMBRAndRAGHelper] = None
+        self._is_peft = False
         hf_token = token if token is not None else _hf_token()
+        # Keep PEFT adapters unmerged by default so non-Swahili languages can
+        # disable_adapter() and recover the frozen SunflowerASR-51 base.
+        if merge_lora is None:
+            merge_lora = os.getenv("NDIZI_MERGE_LORA", "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+            }
 
         if device:
             self.device = torch.device(device)
@@ -419,24 +470,48 @@ class HuggingFaceWhisperClient:
             from pathlib import Path
             import json
 
-            local_dir = Path(model_id).expanduser()
-            adapter_cfg = local_dir / "adapter_config.json" if local_dir.is_dir() else None
-            if adapter_cfg is not None and adapter_cfg.is_file():
+            adapter_id = _find_adapter_config(model_id, hf_token)
+            if adapter_id is not None:
                 from peft import PeftModel
 
-                adata = json.loads(adapter_cfg.read_text(encoding="utf-8"))
-                base_id = str(adata.get("base_model_name_or_path") or "Sunbird/SunflowerASR-51-african-languages")
+                adapter_path = Path(adapter_id).expanduser()
+                if adapter_path.is_dir() and (adapter_path / "adapter_config.json").is_file():
+                    adata = json.loads((adapter_path / "adapter_config.json").read_text(encoding="utf-8"))
+                else:
+                    from huggingface_hub import hf_hub_download
+
+                    cfg_path = hf_hub_download(adapter_id, "adapter_config.json", **load_kwargs)
+                    adata = json.loads(Path(cfg_path).read_text(encoding="utf-8"))
+                base_id = str(
+                    adata.get("base_model_name_or_path") or "Sunbird/SunflowerASR-51-african-languages"
+                )
+                # Prefer processor from the eval model_id (merged or adapter), else base.
+                processor_id = model_id
                 try:
-                    self.processor = WhisperProcessor.from_pretrained(model_id, **load_kwargs)
+                    self.processor = WhisperProcessor.from_pretrained(processor_id, **load_kwargs)
                 except Exception:  # noqa: BLE001
-                    self.processor = WhisperProcessor.from_pretrained(base_id, **load_kwargs)
+                    try:
+                        self.processor = WhisperProcessor.from_pretrained(adapter_id, **load_kwargs)
+                    except Exception:  # noqa: BLE001
+                        self.processor = WhisperProcessor.from_pretrained(base_id, **load_kwargs)
                 base_model = WhisperForConditionalGeneration.from_pretrained(
                     base_id,
                     torch_dtype=resolved_dtype,
                     **load_kwargs,
                 )
-                peft_model = PeftModel.from_pretrained(base_model, model_id, **load_kwargs)
-                self.model = peft_model.merge_and_unload().to(self.device)
+                peft_model = PeftModel.from_pretrained(base_model, adapter_id, **load_kwargs)
+                if merge_lora:
+                    logger.info("Merging LoRA adapter %s into base %s (NDIZI_MERGE_LORA)", adapter_id, base_id)
+                    self.model = peft_model.merge_and_unload().to(self.device)
+                    self._is_peft = False
+                else:
+                    logger.info(
+                        "Keeping PEFT adapter %s on base %s (language-route: Swahili only)",
+                        adapter_id,
+                        base_id,
+                    )
+                    self.model = peft_model.to(self.device)
+                    self._is_peft = True
             else:
                 self.processor = WhisperProcessor.from_pretrained(model_id, **load_kwargs)
                 self.model = WhisperForConditionalGeneration.from_pretrained(
@@ -444,6 +519,14 @@ class HuggingFaceWhisperClient:
                     torch_dtype=resolved_dtype,
                     **load_kwargs,
                 ).to(self.device)
+                if _is_local_finetune(model_id) and "sunflower" in model_id.lower():
+                    logger.warning(
+                        "Loaded merged Sunflower fine-tune %s without a PEFT adapter. "
+                        "Non-Swahili languages (e.g. Oromo) will show LoRA-merge degrade; "
+                        "point NDIZI_PEFT_ADAPTER at the unmerged adapter (or Hub adapter repo) "
+                        "for disable_adapter() language routing back to the frozen base.",
+                        model_id,
+                    )
         except Exception as exc:  # noqa: BLE001
             name = exc.__class__.__name__
             msg = str(exc).lower()
@@ -452,8 +535,15 @@ class HuggingFaceWhisperClient:
             raise
 
         self.model.eval()
-        self._sunbird = _is_sunbird_whisper(model_id)
-        self._local_ft = _is_local_finetune(model_id)
+        self._sunbird = _is_sunbird_whisper(model_id) or (
+            self._is_peft and _is_sunbird_whisper(
+                getattr(getattr(self.model, "config", None), "_name_or_path", "") or model_id
+            )
+        )
+        # PEFT on Sunflower base is always a Sunbird decoder for language tokens.
+        if self._is_peft:
+            self._sunbird = True
+        self._local_ft = _is_local_finetune(model_id) or self._is_peft
         if hasattr(self.model, "config") and self.model.config is not None:
             self.model.config.forced_decoder_ids = None
         if hasattr(self.model, "generation_config") and self.model.generation_config is not None:
@@ -466,6 +556,20 @@ class HuggingFaceWhisperClient:
         self._notimestamps_tok = self.processor.tokenizer.convert_tokens_to_ids("<|notimestamps|>")
         if self.gemma_mbr or self.rag_prompt:
             self._gemma_helper = _GemmaMBRAndRAGHelper(device=str(self.device))
+
+    def _adapter_cm(self, language: Optional[str], language_config: Optional[str]):
+        """Enable Ndizi LoRA only for Swahili; otherwise run frozen Sunflower base."""
+        from contextlib import nullcontext
+
+        if not self._is_peft:
+            return nullcontext()
+        if _is_swahili_language(language, language_config):
+            return nullcontext()
+        logger.info(
+            "PEFT language-route: disable_adapter() for language=%r (base SunflowerASR-51)",
+            language or language_config,
+        )
+        return self.model.disable_adapter()
 
     def _forced_decoder_ids(
         self,
@@ -508,15 +612,16 @@ class HuggingFaceWhisperClient:
                 audio = audio.mean(axis=-1)
             texts: list[str] = []
             prev_chunk_tail: str = ""
-            for chunk in _chunk_audio(audio, SAMPLE_RATE):
-                chunk_txt = self._transcribe_chunk(
-                    chunk,
-                    forced,
-                    prev_context=prev_chunk_tail,
-                )
-                if chunk_txt.strip():
-                    texts.append(chunk_txt.strip())
-                    prev_chunk_tail = " ".join(chunk_txt.strip().split()[-18:])
+            with self._adapter_cm(language, language_config):
+                for chunk in _chunk_audio(audio, SAMPLE_RATE):
+                    chunk_txt = self._transcribe_chunk(
+                        chunk,
+                        forced,
+                        prev_context=prev_chunk_tail,
+                    )
+                    if chunk_txt.strip():
+                        texts.append(chunk_txt.strip())
+                        prev_chunk_tail = " ".join(chunk_txt.strip().split()[-18:])
             text = join_chunk_transcripts(texts)
             if self.canonicalize_output and text:
                 text = clean_swahili_training_target(text)

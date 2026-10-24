@@ -329,45 +329,35 @@
 
       <div class="card">
         <div class="card-header">
-          <span>Swahili Fair WER &amp; Fair Clean WER Across All 8 Evaluated Systems (Test Split n = 1,036)</span>
+          <span>Swahili Fair WER Across All 9 Evaluated Systems (Test Split n = 1,036; worst &rarr; best)</span>
           <span>Lower is better (%)</span>
         </div>
         <div class="card-body">
           <div class="bar-chart">
             <div class="bar-row">
               <div><code>ndizi-whisper-turbo</code></div>
-              <div class="bar-track"><div class="bar-fill" style="width:79.5%; background:var(--danger);"></div></div>
+              <div class="bar-track"><div class="bar-fill" style="width:80.0%; background:var(--accent);"></div></div>
               <div class="num">21.66%</div>
             </div>
             <div class="bar-row">
               <div><code>gemini-2.5-flash</code></div>
-              <div class="bar-track"><div class="bar-fill" style="width:68.4%; background:var(--warning);"></div></div>
+              <div class="bar-track"><div class="bar-fill" style="width:70.5%; background:var(--accent);"></div></div>
               <div class="num">19.09%</div>
             </div>
             <div class="bar-row">
-              <div><code>sunflower51-lora</code> (&le;30s)</div>
-              <div class="bar-track"><div class="bar-fill" style="width:62.1%; background:var(--accent);"></div></div>
+              <div><code>sunflower51-lora</code></div>
+              <div class="bar-track"><div class="bar-fill" style="width:62.7%; background:var(--accent);"></div></div>
               <div class="num">16.98%</div>
             </div>
             <div class="bar-row">
               <div><code>sunflower51-grpo</code></div>
-              <div class="bar-track"><div class="bar-fill" style="width:61.8%; background:var(--accent);"></div></div>
+              <div class="bar-track"><div class="bar-fill" style="width:62.4%; background:var(--accent);"></div></div>
               <div class="num">16.89%</div>
             </div>
             <div class="bar-row">
               <div><code>sunflower51-lora-qc</code></div>
-              <div class="bar-track"><div class="bar-fill" style="width:56.3%; background:var(--accent);"></div></div>
+              <div class="bar-track"><div class="bar-fill" style="width:56.5%; background:var(--accent);"></div></div>
               <div class="num">15.30%</div>
-            </div>
-            <div class="bar-row">
-              <div><strong><code>sunflower51-lora-qc-v2</code> (Deploy)</strong></div>
-              <div class="bar-track"><div class="bar-fill" style="width:54.4%; background:var(--success);"></div></div>
-              <div class="num"><strong>14.60%</strong></div>
-            </div>
-            <div class="bar-row">
-              <div><code>sunflower51-local-rover</code></div>
-              <div class="bar-track"><div class="bar-fill" style="width:55.9%; background:var(--accent);"></div></div>
-              <div class="num">15.19%</div>
             </div>
             <div class="bar-row">
               <div><code>sunflower51-lora-qc-gemma-mbr</code></div>
@@ -375,8 +365,18 @@
               <div class="num">14.98%</div>
             </div>
             <div class="bar-row">
+              <div><strong><code>sunflower51-lora-qc-v2</code> (Deploy)</strong></div>
+              <div class="bar-track"><div class="bar-fill" style="width:53.9%; background:var(--success);"></div></div>
+              <div class="num"><strong>14.60%</strong></div>
+            </div>
+            <div class="bar-row">
+              <div><code>sunflower51-local-rover</code></div>
+              <div class="bar-track"><div class="bar-fill" style="width:53.7%; background:var(--accent);"></div></div>
+              <div class="num">14.54%</div>
+            </div>
+            <div class="bar-row">
               <div><strong><code>fusion-lora-qc-gemini-turbo</code></strong></div>
-              <div class="bar-track"><div class="bar-fill" style="width:49.6%; background:var(--info);"></div></div>
+              <div class="bar-track"><div class="bar-fill" style="width:48.8%; background:var(--info);"></div></div>
               <div class="num"><strong>13.21%</strong></div>
             </div>
           </div>
@@ -402,7 +402,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
+                        <tr>
               <td><code>ndizi-whisper-turbo</code></td>
               <td>Prior domain fine-tuned Whisper-v3-Turbo</td>
               <td class="num">1,036</td>
@@ -467,6 +467,19 @@
               <td class="num">14.45%</td>
               <td class="num">5.66%</td>
             </tr>
+            <tr>
+              <td><code>sunflower51-lora-qc-gemma-mbr</code></td>
+              <td>LoRA-QC + 5-Beam Gemma-MBR (test-time)</td>
+              <td class="num">1,036</td>
+              <td class="num">33.60%</td>
+              <td class="num">24.25%</td>
+              <td class="num">8.19%</td>
+              <td class="num">23.59%</td>
+              <td class="num">14.98%</td>
+              <td class="num">6.20%</td>
+              <td class="num">14.28%</td>
+              <td class="num">5.62%</td>
+            </tr>
             <tr class="highlight-row">
               <td><code>sunflower51-lora-qc-v2</code></td>
               <td>Best Single Model / Deploy: QC + MMS_FA + rsLoRA (5 ep)</td>
@@ -482,29 +495,16 @@
             </tr>
             <tr>
               <td><code>sunflower51-local-rover</code></td>
-              <td>Local 3-Checkpoint ROVER (LoRA-QC + LoRA + GRPO)</td>
+              <td>Local 3-Checkpoint ROVER (LoRA-QC-v2 + MBR + GRPO)</td>
               <td class="num">1,036</td>
-              <td class="num">32.99%</td>
-              <td class="num">23.37%</td>
-              <td class="num">8.08%</td>
-              <td class="num">22.54%</td>
-              <td class="num">15.19%</td>
-              <td class="num">6.32%</td>
-              <td class="num">14.33%</td>
-              <td class="num">5.63%</td>
-            </tr>
-            <tr>
-              <td><code>sunflower51-lora-qc-gemma-mbr</code></td>
-              <td>LoRA-QC + 5-Beam Gemma-MBR (test-time)</td>
-              <td class="num">1,036</td>
-              <td class="num">33.60%</td>
-              <td class="num">24.25%</td>
-              <td class="num">8.19%</td>
-              <td class="num">23.59%</td>
-              <td class="num">14.98%</td>
-              <td class="num">6.20%</td>
-              <td class="num">14.28%</td>
-              <td class="num">5.62%</td>
+              <td class="num">33.19%</td>
+              <td class="num">23.90%</td>
+              <td class="num">8.27%</td>
+              <td class="num">23.25%</td>
+              <td class="num">14.54%</td>
+              <td class="num">6.27%</td>
+              <td class="num">13.86%</td>
+              <td class="num">5.72%</td>
             </tr>
             <tr class="highlight-row">
               <td><code>fusion-lora-qc-gemini-turbo</code></td>
@@ -588,9 +588,9 @@
             <tr>
               <td><strong>A7</strong></td>
               <td>Local 3-Checkpoint ROVER Voting</td>
-              <td class="num">15.30% &rarr; 15.19%</td>
-              <td class="num">-0.14 pp</td>
-              <td>Word-level DP alignment across LoRA-QC (0.50), LoRA (0.25), and GRPO (0.25) achieves 15.19% Fair WER and best single-family Fixed WER (23.37%).</td>
+              <td class="num">14.60% &rarr; 14.54%</td>
+              <td class="num">-0.06 pp</td>
+              <td>Word-level DP alignment anchored on LoRA-QC-v2 with MBR and GRPO voters reaches 14.54% Fair WER (13.86% Fair Clean) and trims &gt;30s long-audio WER to 16.96%.</td>
             </tr>
             <tr>
               <td><strong>A8</strong></td>
@@ -620,7 +620,7 @@
       </p>
       <div class="table-wrap">
         <table>
-          <thead>
+                    <thead>
             <tr>
               <th>Duration Bucket</th>
               <th class="num">n</th>
@@ -630,8 +630,8 @@
               <th class="num">Stage-1 LoRA (30s)</th>
               <th class="num">Stage-2 GRPO</th>
               <th class="num">LoRA-QC (FullAudio)</th>
-              <th class="num">LoRA-QC-v2 (Deploy)</th>
               <th class="num">LoRA-QC + Gemma-MBR</th>
+              <th class="num">LoRA-QC-v2 (Deploy)</th>
               <th class="num">Local-ROVER</th>
               <th class="num">3-Model Fusion</th>
             </tr>
@@ -646,9 +646,9 @@
               <td class="num">12.55%</td>
               <td class="num">11.51%</td>
               <td class="num">10.90%</td>
-              <td class="num">10.06%</td>
               <td class="num">10.71%</td>
-              <td class="num">10.85%</td>
+              <td class="num">10.06%</td>
+              <td class="num">10.20%</td>
               <td class="num tone-info"><strong>9.41%</strong></td>
             </tr>
             <tr>
@@ -660,9 +660,9 @@
               <td class="num">14.30%</td>
               <td class="num">14.24%</td>
               <td class="num">13.29%</td>
-              <td class="num">12.77%</td>
               <td class="num">13.06%</td>
-              <td class="num">13.27%</td>
+              <td class="num">12.77%</td>
+              <td class="num">12.78%</td>
               <td class="num tone-info"><strong>11.39%</strong></td>
             </tr>
             <tr>
@@ -674,9 +674,9 @@
               <td class="num">20.10%</td>
               <td class="num">20.24%</td>
               <td class="num">17.92%</td>
-              <td class="num">17.12%</td>
               <td class="num">17.50%</td>
-              <td class="num">17.72%</td>
+              <td class="num">17.12%</td>
+              <td class="num">16.96%</td>
               <td class="num tone-info"><strong>15.53%</strong></td>
             </tr>
           </tbody>
@@ -691,7 +691,7 @@
       </p>
       <div class="table-wrap">
         <table>
-          <thead>
+                    <thead>
             <tr>
               <th>Speaker L1</th>
               <th>Language Family</th>
@@ -701,8 +701,8 @@
               <th class="num">Stage-1 LoRA (30s)</th>
               <th class="num">Stage-2 GRPO</th>
               <th class="num">LoRA-QC (FullAudio)</th>
-              <th class="num">LoRA-QC-v2 (Deploy)</th>
               <th class="num">LoRA-QC + Gemma-MBR</th>
+              <th class="num">LoRA-QC-v2 (Deploy)</th>
               <th class="num">Local-ROVER</th>
               <th class="num">3-Model Fusion</th>
             </tr>
@@ -717,9 +717,9 @@
               <td class="num">16.34%</td>
               <td class="num">16.22%</td>
               <td class="num">14.44%</td>
-              <td class="num">13.80%</td>
               <td class="num">14.15%</td>
-              <td class="num">14.26%</td>
+              <td class="num">13.80%</td>
+              <td class="num">13.78%</td>
               <td class="num tone-info"><strong>12.63%</strong></td>
             </tr>
             <tr>
@@ -731,9 +731,9 @@
               <td class="num">17.32%</td>
               <td class="num">16.72%</td>
               <td class="num">16.03%</td>
-              <td class="num">15.13%</td>
               <td class="num">15.65%</td>
-              <td class="num">15.97%</td>
+              <td class="num">15.13%</td>
+              <td class="num">15.04%</td>
               <td class="num tone-info"><strong>13.61%</strong></td>
             </tr>
             <tr>
@@ -745,9 +745,9 @@
               <td class="num">17.94%</td>
               <td class="num">17.85%</td>
               <td class="num">16.51%</td>
-              <td class="num">16.53%</td>
               <td class="num">16.81%</td>
-              <td class="num">16.49%</td>
+              <td class="num">16.53%</td>
+              <td class="num">16.26%</td>
               <td class="num tone-info"><strong>14.83%</strong></td>
             </tr>
             <tr>
@@ -759,9 +759,9 @@
               <td class="num">15.41%</td>
               <td class="num">15.08%</td>
               <td class="num">13.87%</td>
-              <td class="num">12.74%</td>
               <td class="num">13.91%</td>
-              <td class="num">13.84%</td>
+              <td class="num">12.74%</td>
+              <td class="num">13.07%</td>
               <td class="num tone-info"><strong>11.44%</strong></td>
             </tr>
             <tr>
@@ -769,13 +769,13 @@
               <td>Bantu (Seuta G31)</td>
               <td class="num">50</td>
               <td class="num">28.44%</td>
-              <td class="num tone-danger">39.34%</td>
+              <td class="num">39.34%</td>
               <td class="num">22.81%</td>
               <td class="num">25.20%</td>
               <td class="num">20.46%</td>
+              <td class="num">18.76%</td>
               <td class="num">19.45%</td>
               <td class="num">18.76%</td>
-              <td class="num">20.50%</td>
               <td class="num tone-info"><strong>15.98%</strong></td>
             </tr>
             <tr>
@@ -787,9 +787,9 @@
               <td class="num">14.53%</td>
               <td class="num">15.10%</td>
               <td class="num">12.54%</td>
-              <td class="num">12.61%</td>
               <td class="num">12.11%</td>
-              <td class="num">12.39%</td>
+              <td class="num">12.61%</td>
+              <td class="num">12.68%</td>
               <td class="num tone-info"><strong>12.06%</strong></td>
             </tr>
             <tr>
@@ -801,9 +801,9 @@
               <td class="num">17.04%</td>
               <td class="num">17.30%</td>
               <td class="num">15.86%</td>
-              <td class="num tone-success"><strong>14.56%</strong></td>
               <td class="num">15.47%</td>
-              <td class="num">15.73%</td>
+              <td class="num"><strong>14.56%</strong></td>
+              <td class="num">14.82%</td>
               <td class="num">15.34%</td>
             </tr>
             <tr>
@@ -815,9 +815,9 @@
               <td class="num">11.16%</td>
               <td class="num">10.93%</td>
               <td class="num">9.74%</td>
+              <td class="num">9.74%</td>
               <td class="num">8.08%</td>
-              <td class="num">9.74%</td>
-              <td class="num">9.74%</td>
+              <td class="num">8.31%</td>
               <td class="num tone-info"><strong>7.60%</strong></td>
             </tr>
             <tr>
@@ -829,8 +829,8 @@
               <td class="num">17.07%</td>
               <td class="num">15.12%</td>
               <td class="num">14.15%</td>
-              <td class="num tone-success"><strong>12.68%</strong></td>
               <td class="num">13.66%</td>
+              <td class="num"><strong>12.68%</strong></td>
               <td class="num">13.66%</td>
               <td class="num">13.66%</td>
             </tr>
@@ -841,18 +841,18 @@
       <h2>3. Stratification by Administrative District</h2>
       <div class="table-wrap">
         <table>
-          <thead>
+                    <thead>
             <tr>
               <th>District</th>
-              <th>Region / Dominant L1s</th>
+              <th>Region / Primary L1s</th>
               <th class="num">n</th>
               <th class="num">Whisper-Turbo</th>
               <th class="num">Gemini 2.5 Flash</th>
               <th class="num">Stage-1 LoRA (30s)</th>
               <th class="num">Stage-2 GRPO</th>
               <th class="num">LoRA-QC (FullAudio)</th>
-              <th class="num">LoRA-QC-v2 (Deploy)</th>
               <th class="num">LoRA-QC + Gemma-MBR</th>
+              <th class="num">LoRA-QC-v2 (Deploy)</th>
               <th class="num">Local-ROVER</th>
               <th class="num">3-Model Fusion</th>
             </tr>
@@ -867,9 +867,9 @@
               <td class="num">15.28%</td>
               <td class="num">14.92%</td>
               <td class="num">14.25%</td>
-              <td class="num">13.47%</td>
               <td class="num">13.91%</td>
-              <td class="num">14.15%</td>
+              <td class="num">13.47%</td>
+              <td class="num">13.44%</td>
               <td class="num tone-info"><strong>12.21%</strong></td>
             </tr>
             <tr>
@@ -881,9 +881,9 @@
               <td class="num">17.48%</td>
               <td class="num">17.17%</td>
               <td class="num">15.73%</td>
-              <td class="num">14.54%</td>
               <td class="num">15.49%</td>
-              <td class="num">15.54%</td>
+              <td class="num">14.54%</td>
+              <td class="num">14.47%</td>
               <td class="num tone-info"><strong>13.17%</strong></td>
             </tr>
             <tr>
@@ -895,9 +895,9 @@
               <td class="num">18.34%</td>
               <td class="num">19.11%</td>
               <td class="num">16.42%</td>
-              <td class="num">15.58%</td>
               <td class="num">15.38%</td>
-              <td class="num">16.41%</td>
+              <td class="num">15.58%</td>
+              <td class="num">15.43%</td>
               <td class="num tone-info"><strong>13.57%</strong></td>
             </tr>
             <tr>
@@ -909,9 +909,9 @@
               <td class="num">18.25%</td>
               <td class="num">17.92%</td>
               <td class="num">15.50%</td>
-              <td class="num">14.93%</td>
               <td class="num">15.73%</td>
-              <td class="num">15.34%</td>
+              <td class="num">14.93%</td>
+              <td class="num">15.12%</td>
               <td class="num tone-info"><strong>14.42%</strong></td>
             </tr>
             <tr>
@@ -923,9 +923,9 @@
               <td class="num">18.57%</td>
               <td class="num">18.67%</td>
               <td class="num">16.56%</td>
-              <td class="num">16.26%</td>
               <td class="num">16.29%</td>
-              <td class="num">16.33%</td>
+              <td class="num">16.26%</td>
+              <td class="num">16.39%</td>
               <td class="num tone-info"><strong>14.88%</strong></td>
             </tr>
             <tr>
@@ -937,9 +937,9 @@
               <td class="num">17.12%</td>
               <td class="num">17.08%</td>
               <td class="num">15.44%</td>
-              <td class="num">16.02%</td>
               <td class="num">15.77%</td>
-              <td class="num">15.44%</td>
+              <td class="num">16.02%</td>
+              <td class="num">15.16%</td>
               <td class="num tone-info"><strong>13.36%</strong></td>
             </tr>
           </tbody>
@@ -1057,11 +1057,11 @@
 \texttt{sunflower51-lora} &amp; Stage-1 LoRA ($\le 30$s train only) &amp; 28.83 &amp; 25.62 &amp; 8.84 &amp; 16.98 &amp; 6.96 &amp; 16.13 \\
 \texttt{sunflower51-grpo} &amp; Stage-2 Quality-Gated Semantic GRPO &amp; 28.67 &amp; 25.55 &amp; 8.79 &amp; 16.89 &amp; 6.88 &amp; 16.21 \\
 \texttt{sunflower51-lora-qc} &amp; Stage-1 LoRA + QC + MMS\_FA (prior) &amp; 33.28 &amp; 23.66 &amp; 8.15 &amp; 15.30 &amp; 6.35 &amp; 14.45 \\
-\texttt{sunflower51-lora-qc-v2} &amp; Stage-1 LoRA-QC v2 (5 epochs, deploy) &amp; 33.49 &amp; 24.11 &amp; 8.13 &amp; \textbf{14.60} &amp; \textbf{6.10} &amp; \textbf{13.82} \\
-\texttt{sunflower51-local-rover} &amp; 3-Checkpoint ROVER (LoRA-QC+LoRA+GRPO) &amp; 32.99 &amp; \textbf{23.37} &amp; \textbf{8.08} &amp; 15.19 &amp; 6.32 &amp; 14.33 \\
 \texttt{sunflower51-lora-qc-gemma-mbr} &amp; LoRA-QC + Overlap-VAD LCS + Gemma-MBR &amp; 33.60 &amp; 24.25 &amp; 8.19 &amp; 14.98 &amp; 6.20 &amp; 14.28 \\
+\texttt{sunflower51-lora-qc-v2} &amp; Stage-1 LoRA-QC v2 (5 epochs, deploy) &amp; 33.49 &amp; 24.11 &amp; 8.13 &amp; \textbf{14.60} &amp; \textbf{6.10} &amp; \textbf{13.82} \\
+\texttt{sunflower51-local-rover} &amp; 3-Checkpoint ROVER (LoRA-QC-v2+MBR+GRPO) &amp; 33.19 &amp; 23.90 &amp; 8.27 &amp; \textbf{14.54} &amp; 6.27 &amp; 13.86 \\
 \midrule
-\texttt{fusion-lora-qc-gemini-turbo} &amp; 3-Model Cross-Family LLM Fusion ($n=1{,}028$) &amp; 29.27 &amp; \textbf{21.48} &amp; 8.16 &amp; \textbf{13.21} &amp; 6.20 &amp; \textbf{12.53} \\
+\texttt{fusion-lora-qc-gemini-turbo} &amp; 3-Model Cross-Family LLM Fusion ($n=1{,}028$) &amp; 29.47 &amp; \textbf{21.48} &amp; 8.16 &amp; \textbf{13.21} &amp; 6.20 &amp; \textbf{12.53} \\
 \bottomrule
 \end{tabular}
 \end{table*}</code></pre>

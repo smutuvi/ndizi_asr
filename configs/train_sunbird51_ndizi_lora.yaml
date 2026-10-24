@@ -11,10 +11,17 @@
 #   ndizi-asr-train --config configs/train_sunbird51_ndizi_lora.yaml --dry-run
 #   ndizi-asr-train --config configs/train_sunbird51_ndizi_lora.yaml
 #
-# Eval:
+# Eval (Swahili — merged deploy weights OK):
 #   ndizi-asr --model hf:outputs/sunflower51_ndizi1sw_lora_qc_v2/merged \
 #     --dataset smutuvi/ndizi-1-sw --split test --text-column transcript \
 #     --device cuda --experiment-name sunflower51_ndizi1sw_lora_qc_v2_test
+#
+# CropConcept Oromo degrade check (MUST use unmerged PEFT adapter so orm disables LoRA):
+#   ndizi-asr --model hf:outputs/sunflower51_ndizi1sw_lora_qc_v2 \
+#     --csv "$CSV" --languages om --normalize oromo_fair --device cuda \
+#     --experiment-name cropconcept_degrade_lora_qc_v2_peft
+#   # Or: NDIZI_PEFT_ADAPTER=outputs/sunflower51_ndizi1sw_lora_qc_v2 \
+#   #      ndizi-asr --model hf:smutuvi/sunflower51-ndizi1sw-lora-qc-v2 ...
 
 dataset_id: smutuvi/ndizi-1-sw
 experiment_name: sunflower51_ndizi1sw_lora_qc_v2

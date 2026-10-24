@@ -879,6 +879,8 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
         # Resume from latest checkpoint under output_dir if present
         resume_ckpt = True
     train_result = trainer.train(resume_from_checkpoint=resume_ckpt if resume_ckpt else None)
+    # Always persist the unmerged PEFT adapter first. Multilingual eval needs it for
+    # disable_adapter() language routing (Swahili LoRA on, Oromo/other = frozen base).
     trainer.save_model(out_dir)
     processor.save_pretrained(out_dir)
     if cfg.lora and bool(cfg.extra.get("save_merged", True)) and hasattr(model, "merge_and_unload"):
@@ -892,6 +894,13 @@ def train_whisper(cfg: "TrainConfig") -> Dict[str, Any]:
             merged_model.generation_config.task = None
         merged_model.save_pretrained(str(merged_dir))
         processor.save_pretrained(str(merged_dir))
+        logger.info(
+            "Unmerged PEFT adapter kept at %s (use for CropConcept / non-Swahili; "
+            "set NDIZI_PEFT_ADAPTER or --model hf:%s). Merged deploy weights at %s.",
+            out_dir,
+            out_dir,
+            merged_dir,
+        )
 
     metrics = dict(train_result.metrics)
     if eval_ds is not None:
