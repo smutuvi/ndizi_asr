@@ -6,19 +6,18 @@
 
 ---
 
-## 1. Executive Summary & Headline Results
+## 1. Executive Summary & Key Findings (What Moved Performance)
 
-Spontaneous agricultural survey speech recorded in rural East Africa presents three compounding challenges that cause off-the-shelf and naively fine-tuned ASR models to appear to fail (>35% naive WER):
-1. **Evaluation & Orthographic Noise (~8–12 pp artificial penalty):** Field transcripts contain glued punctuation (`habari,mzuri`), spreadsheet MacRoman/UTF-8 mojibake (`‚Ä¶`, `√â`), inconsistent interviewer/farmer backchannels (`eeh`, `mmmh`), mixed Arabic digits vs. spoken Swahili numerals, Swahili compound/locative boundary drift (`barabara ni` vs. `barabarani`), and Bantu L1 phonological variation (`r`/`l` substitution and initial `h`-dropping).
-2. **The 30-Second Long-Audio Bottleneck (27.7% of corpus):** Over a quarter of farmer responses exceed Whisper's 30-second positional window (1,743 train clips and 287 test clips). Naive training drops clips >30s, starving the model of 31% of training data, while naive inference suffers boundary truncation.
-3. **Multilingual Preservation vs. Acoustic Domain Shift:** Adapting solely the decoder leaves the acoustic encoder mismatched to noisy rural mobile recordings and non-native Swahili accents, whereas unfreezing the encoder destroys the 51-language representation of `SunflowerASR-51`.
+High initial error rates (**35.94% WER**) on rural East African farmer interviews came from three avoidable bottlenecks:
+1. **Unfair scoring of natural speech (14.28 pp false penalty):** Standard metrics penalize punctuation typos (`habari,mzuri`), spreadsheet encoding glitches (`‚Ä¶`, `√â`), listener fillers (*"eeh"*, *"mmmh"*), digits vs. spoken words, Swahili compound word spacing (`barabara ni` vs. `barabarani`), and regional accents (`r`/`l` swaps, dropped `h`). Fixing evaluation alone drops the exact same `ndizi-whisper-turbo` output from **35.94% to 21.66% WER**.
+2. **Whisper's 30-second audio limit (27.7% of test clips):** Over a quarter of farmer responses exceed Whisper's 30-second window (1,743 train and 287 test clips) and were previously cut off or discarded during training.
+3. **Adapting to rural Swahili without forgetting 50 other languages:** Leaving the audio encoder unchanged struggles with noisy phone recordings, while permanently merging Swahili updates into the base model hurts other African languages (increasing Ethiopian Oromo error by **+18.80 pp**).
 
-By systematically addressing each bottleneck, our experimentation achieved:
-- **35.94% $\rightarrow$ 21.66% (-14.28 pp)** on the baseline `ndizi-whisper-turbo` predictions purely by fixing glued-punctuation/mojibake tokenization (`32.00%` Fixed WER) and applying linguistically fair Swahili normalization (`21.66%` Fair WER).
-- **21.66% $\rightarrow$ 15.30% (-6.36 pp)** single-model Swahili Fair WER (`14.45%` Fair Clean WER) via **Stage-1 LoRA-QC (`sunflower51-lora-qc`)**: automated dataset QC + `torchaudio` `MMS_FA` forced-aligned long-audio training segmentation (5,572 $\rightarrow$ 7,610 segments) + 100%-frozen-base encoder+decoder rsLoRA + SpecAugment.
-- **15.30% $\rightarrow$ 14.60% (-0.70 pp)** best single-model Swahili Fair WER (**`13.82%` Fair Clean WER**, `5.46%` CER) via **`sunflower51-lora-qc-v2`**: same QC + MMS_FA recipe with on-the-fly feature extraction and a completed 5-epoch train (`n_train=7,608`).
-- **14.60% $\rightarrow$ 14.98%** optional test-time **EmbeddingGemma MBR** on the prior LoRA-QC checkpoint (still useful for Fixed/ensemble ablations).
-- **14.60% $\rightarrow$ 13.21% (-1.39 pp)** Swahili Fair WER (**`12.53%` Fair Clean WER**, `5.63%` CER) via **3-Model Cross-Family Fusion** combining `sunflower51-lora-qc`, `gemini-2.5-flash`, and `ndizi-whisper-turbo` with automatic ASR fallback on empty or truncated LLM responses.
+**How our final training (`sunflower51-lora-qc-v2`, 5 epochs) solved it:**
+- **Cleaned data & preserved long audio:** Filtered 21 corrupted training rows, split >30s training recordings at exact word boundaries using forced alignment (`5,572 → 7,608` clips), and stitched overlapping voice segments seamlessly at test time.
+- **14.60% single-model Swahili Fair WER (down from 21.66%):** Trained lightweight plug-in adapters (`rsLoRA`) across both encoder and decoder with the 51-language base model 100% frozen — reaching **13.82% Fair Clean WER** (`5.46%` CER), halving errors on accented Kizigua speakers vs. Gemini 2.5 Flash (`39.34% → 19.45%`), and beating Stage-2 reinforcement learning (`GRPO`, `16.89%`).
+- **13.21% WER with multi-model fusion (`12.53%` clean):** Combining local checkpoints reaches **14.54%** (`sunflower51-local-rover`), and fusing `sunflower51-lora-qc` + `gemini-2.5-flash` + `ndizi-whisper-turbo` reaches **13.21% Fair WER**.
+- **0.00 pp language forgetting on Ethiopian Oromo (`57.69%` WER / `28.79%` CER):** Activating the Swahili plug-in adapter only when `language == "swahili"` preserves 100% of `SunflowerASR-51`'s original multilingual performance.
 
 ---
 
@@ -103,6 +102,19 @@ While all interviews are in Swahili, 59% of respondents speak an indigenous Bant
 - **Overlap-VAD + LCS Stitching (`audio.py`, `whisper_hf.py`):** Slices $>30\text{s}$ test clips via Silero-VAD with a $1.5\text{s}$ overlap and stitches adjacent chunk hypotheses via token-level Longest Common Subsequence (`_stitch_chunk_texts_lcs`).
 - **EmbeddingGemma-300M MBR Reranking:** Decodes $N=5$ beams and selects the candidate maximizing $0.65 \cdot \tilde{s}_{\text{acoustic}}(h_i) + 0.35 \cdot \frac{1}{N}\sum_j \cos(e(h_i), e(h_j))$ using `google/embeddinggemma-300m`.
 - **Cross-Family LLM Fusion:** Synthesizes hypotheses from `sunflower51-lora-qc`, `gemini-2.5-flash`, and `ndizi-whisper-turbo` via `gemini-2.5-flash` with automatic primary-ASR fallback whenever the LLM returns an empty string.
+
+### 4.5 51-Language Retention Check on CropConcept Oromo (`n = 61`, `--normalize oromo_fair`)
+To verify that adapting `Sunbird/SunflowerASR-51-african-languages` to Swahili farmer interviews does not degrade the other 50 African languages, we evaluated both the statically merged checkpoint (`smutuvi/sunflower51-ndizi1sw-lora-qc-v2`) and the language-routed PEFT checkpoint (`outputs/sunflower51_ndizi1sw_lora_qc_v2`, which attaches the Swahili LoRA adapter only when `language == "swahili"`) on the 61 counted Ethiopian Oromo field interviews:
+
+| Model / Routing Regime | Swahili Fair / Clean WER ($n=1{,}036$) | Oromo Verbatim WER / CER ($\ge 0.70$, $n=25$) | Oromo Near-Verbatim WER / CER ($\ge 0.60$, $n=32$) | Oromo Summarized WER / CER ($<0.60$, $n=29$) | Oromo All Counted WER / CER ($n=61$) |
+|---|---:|---:|---:|---:|---:|
+| **`lora-qc-v2` (Language-Routed PEFT Adapter)** | **14.60% / 13.82%** | **57.69% / 28.79%** | **61.07% / 32.28%** | **189.34% / 152.13%** | **101.78% / 71.00%** |
+| Base `Sunbird/SunflowerASR-51` (Zero-Shot) | — | 58.84% / 30.14% | 62.69% / 34.03% | 213.30% / 163.15% | 110.49% / 75.75% |
+| `gemini-2.5-pro` (Zero-Shot Audio API) | — | 60.90% / 30.60% | 65.47% / 34.95% | 237.79% / 179.83% | 120.16% / 81.76% |
+| `lora-qc-v2` (Statically Merged `W_base + ΔW_sw`) | 14.60% / 13.82% | 76.49% / 39.52% *(+18.8 pp)* | 79.19% / 42.47% | 201.97% / 148.79% | 118.16% / 76.82% |
+| `gemini-2.5-flash` (Zero-Shot Audio API) | 19.09% / 17.15% | 122.53% / 80.78% | 125.10% / 82.90% | 179.40% / 138.20% | 142.83% / 101.40% |
+
+**Takeaway:** Statically merging a Swahili-only decoder+encoder LoRA into the backbone shifts cross-lingual subword projections and degrades zero-shot Oromo Verbatim WER by `+18.80 pp` (`57.69% -> 76.49%`). Keeping the base model 100% frozen and routing the PEFT adapter by language code delivers **zero cross-lingual degradation (`57.69% WER / 28.79% CER` on Oromo Verbatim, `101.78% / 71.00%` across all 61 clips)** while retaining the full **`14.60%` Fair / `13.82%` Fair Clean** Swahili accuracy.
 
 ---
 

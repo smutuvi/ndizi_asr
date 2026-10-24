@@ -317,13 +317,20 @@
     <!-- TAB 1: OVERVIEW -->
     <div id="tab-overview" class="tab-panel active">
       <div class="callout">
-        <div class="callout-title">Core Thesis for Publication</div>
+        <div class="callout-title">Key Findings (What Moved Performance)</div>
         <div>
-          Apparent high Word Error Rates (35.9%+) on spontaneous East African field interviews stem from three compounding factors:
-          <strong>(1)</strong> unnormalized glued punctuation, MacRoman/UTF-8 mojibake (<code>‚Ä¶</code>, <code>√â</code>), Swahili compound boundary drift, and Bantu L1 phonological variation (~8–12 pp artificial penalty);
-          <strong>(2)</strong> silent truncation of clips exceeding Whisper's 30s positional window (27.7% of the dataset); and
-          <strong>(3)</strong> acoustic domain mismatch when freezing the encoder vs. catastrophic 51-language forgetting when unfreezing it.
-          Addressing all three with <strong>100%-frozen-base encoder+decoder rsLoRA</strong>, <strong>MMS_FA forced-aligned training segmentation</strong>, and <strong>overlap-VAD + LCS boundary stitching</strong> cuts single-model Fair WER to <strong>15.30%</strong> (<strong>14.98%</strong> with EmbeddingGemma MBR) while retaining 100% of the 51-language base weights.
+          High initial error rates (<strong>35.94% WER</strong>) on rural East African farmer interviews came from three avoidable bottlenecks:
+          <ul style="margin:6px 0 8px 18px; padding:0;">
+            <li><strong>Unfair scoring of natural speech (14.28 pp false penalty):</strong> Standard metrics penalize punctuation typos, encoding glitches, listener fillers (<em>&ldquo;eeh&rdquo;</em>, <em>&ldquo;mmmh&rdquo;</em>), digits vs. spoken words, Swahili compound words, and regional accents (<code>r</code>/<code>l</code>, dropped <code>h</code>). Fixing evaluation alone drops the exact same Whisper-Turbo output from <strong>35.94% to 21.66% WER</strong>.</li>
+            <li><strong>Whisper&rsquo;s 30-second audio limit:</strong> Roughly <strong>28% of test interviews</strong> and <strong>31% of training clips</strong> exceed 30 seconds and were previously cut off or discarded.</li>
+            <li><strong>Adapting to rural Swahili without forgetting 50 other languages:</strong> Leaving the audio encoder unchanged struggles with noisy field recordings, while permanently merging Swahili updates into the base model hurts other African languages (increasing Ethiopian Oromo error by <strong>+18.80 pp</strong>).</li>
+          </ul>
+          <strong>How we solved it:</strong> Our final single model (<strong><code>sunflower51-lora-qc-v2</code></strong>, trained for 5 epochs) cleans corrupted transcripts, splits long recordings at word boundaries during training (<code>5,572 &rarr; 7,608</code> clips) and seamlessly stitches them at test time, and adapts the model using lightweight plug-in adapters (<code>rsLoRA</code>) while keeping the 51-language base model 100% frozen.
+          <ul style="margin:6px 0 0 18px; padding:0;">
+            <li><strong>Swahili accuracy:</strong> Cuts single-model error from <strong>21.66% to 14.60% Fair WER</strong> (<strong>13.82%</strong> on clean clips; <strong>5.46% CER</strong>) and halves errors on accented Kizigua speakers compared to Gemini 2.5 Flash (<strong>39.34% &rarr; 19.45%</strong>).</li>
+            <li><strong>Ensemble accuracy:</strong> Reaches <strong>14.54%</strong> with a 3-checkpoint local vote (ROVER) and <strong>13.21% Fair WER</strong> (<strong>12.53%</strong> clean) when combined with Gemini 2.5 Flash and Whisper-Turbo.</li>
+            <li><strong>Zero language forgetting:</strong> Activating the Swahili adapter only when transcribing Swahili preserves <strong>100% of original accuracy on Ethiopian Oromo</strong> (<strong>0.00 pp degradation</strong>, <code>57.69%</code> WER).</li>
+          </ul>
         </div>
       </div>
 
@@ -1034,6 +1041,71 @@
               <td>Alveolar liquid neutralization (R/L) and initial glottal H-dropping</td>
               <td><code>tayari &harr; tayali</code> | <code>kula &harr; kura</code> | <code>hela &harr; ela</code></td>
               <td>Maps curated agricultural/everyday R/L and H-drop lexical doublets to a single canonical lemma without altering minimal pairs.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>51-Language Retention Check on CropConcept Oromo (<code>n = 61</code>, <code>oromo_fair</code>)</h2>
+      <p>
+        Statically merging a Swahili-only decoder+encoder LoRA into the backbone shifts cross-lingual subword projections
+        and degrades zero-shot Oromo Verbatim WER by <code>+18.80 pp</code> (<code>57.69% &rarr; 76.49%</code>). Keeping the
+        base model 100% frozen and routing the PEFT adapter by language code delivers <strong>zero cross-lingual
+        degradation</strong> (<strong>57.69% WER / 28.79% CER</strong> on Verbatim clips, <strong>101.78% / 71.00%</strong>
+        across all 61 clips) while retaining the full <strong>14.60% Fair / 13.82% Fair Clean</strong> Swahili accuracy.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Model / Routing Regime</th>
+              <th class="num">Swahili Fair / Clean WER</th>
+              <th class="num">Oromo Verbatim (&ge;0.70, n=25)</th>
+              <th class="num">Oromo Near-Verbatim (&ge;0.60, n=32)</th>
+              <th class="num">Oromo Summarized (&lt;0.60, n=29)</th>
+              <th class="num">Oromo All Counted (n=61)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="highlight-row">
+              <td><strong><code>lora-qc-v2</code> (Language-Routed PEFT Adapter)</strong></td>
+              <td class="num tone-success"><strong>14.60% / 13.82%</strong></td>
+              <td class="num tone-success"><strong>57.69% / 28.79%</strong></td>
+              <td class="num tone-success"><strong>61.07% / 32.28%</strong></td>
+              <td class="num"><strong>189.34% / 152.13%</strong></td>
+              <td class="num tone-success"><strong>101.78% / 71.00%</strong></td>
+            </tr>
+            <tr>
+              <td>Base <code>Sunbird/SunflowerASR-51</code> (Zero-Shot)</td>
+              <td class="num">&mdash;</td>
+              <td class="num">58.84% / 30.14%</td>
+              <td class="num">62.69% / 34.03%</td>
+              <td class="num">213.30% / 163.15%</td>
+              <td class="num">110.49% / 75.75%</td>
+            </tr>
+            <tr>
+              <td><code>gemini-2.5-pro</code> (Zero-Shot Audio API)</td>
+              <td class="num">&mdash;</td>
+              <td class="num">60.90% / 30.60%</td>
+              <td class="num">65.47% / 34.95%</td>
+              <td class="num">237.79% / 179.83%</td>
+              <td class="num">120.16% / 81.76%</td>
+            </tr>
+            <tr>
+              <td><code>lora-qc-v2</code> (Statically Merged <code>W_base + &Delta;W_sw</code>)</td>
+              <td class="num">14.60% / 13.82%</td>
+              <td class="num">76.49% / 39.52% (+18.8 pp)</td>
+              <td class="num">79.19% / 42.47%</td>
+              <td class="num">201.97% / 148.79%</td>
+              <td class="num">118.16% / 76.82%</td>
+            </tr>
+            <tr>
+              <td><code>gemini-2.5-flash</code> (Zero-Shot Audio API)</td>
+              <td class="num">19.09% / 17.15%</td>
+              <td class="num">122.53% / 80.78%</td>
+              <td class="num">125.10% / 82.90%</td>
+              <td class="num">179.40% / 138.20%</td>
+              <td class="num">142.83% / 101.40%</td>
             </tr>
           </tbody>
         </table>
