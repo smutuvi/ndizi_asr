@@ -136,6 +136,10 @@ MODEL_ALIASES: dict[str, str] = {
     # Swahili / Ndizi
     "ndizi-whisper-turbo": "smutuvi/ndizi-whisper-large-v3-turbo-optimized",
     "ndizi-whisper": "smutuvi/ndizi-whisper-large-v3-turbo-optimized",
+    # Deploy: SunflowerASR-51 rsLoRA on ndizi-1-sw (~14.60% Fair WER)
+    "sunflower51-lora-qc-v2": "smutuvi/sunflower51-ndizi1sw-lora-qc-v2",
+    "sunflower51-ndizi1sw-lora-qc-v2": "smutuvi/sunflower51-ndizi1sw-lora-qc-v2",
+    "ndizi-sunflower-deploy": "smutuvi/sunflower51-ndizi1sw-lora-qc-v2",
     "w2v-bert-swahili": "badrex/w2v-bert-2.0-swahili-asr",
     "swahili-asr": "badrex/w2v-bert-2.0-swahili-asr",
     "omnilingualasr": "omniASR_LLM_7B",
@@ -232,6 +236,7 @@ def _is_whisper_model(model_id: str) -> bool:
         or "/whisper" in mid
         or "ndizi-whisper" in mid
         or "sunflowerasr" in mid
+        or "sunflower51" in mid
     )
 
 
