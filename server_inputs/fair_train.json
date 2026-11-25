@@ -1,0 +1,507 @@
+{
+ "variants": {
+  "ndiyo": "ndo",
+  "ereza": "eleza",
+  "siyo": "sio",
+  "hua": "huwa",
+  "iki": "hiki",
+  "radha": "ladha",
+  "ilo": "hilo",
+  "ayo": "hayo",
+  "uwotaji": "uotaji",
+  "bola": "bora",
+  "uwa": "huwa",
+  "aiko": "haiko",
+  "ichi": "hichi",
+  "piya": "pia",
+  "ayana": "hayana",
+  "ayaja": "hayaja",
+  "majalibio": "majaribio",
+  "halibika": "haribika",
+  "maerezo": "maelezo",
+  "balidi": "baridi",
+  "auna": "hauna",
+  "ayajaota": "hayajaota",
+  "mabadiriko": "mabadiliko",
+  "ujapenda": "hujapenda",
+  "akina": "hakina",
+  "alzi": "arzi",
+  "alaka": "haraka",
+  "kweri": "kweli",
+  "inashamburiwa": "inashambuliwa",
+  "hioaina": "hiyoaina",
+  "mazingila": "mazingira",
+  "nimerizika": "nimelizika",
+  "aiwezi": "haiwezi",
+  "nimeiyona": "nimeiona",
+  "mafuliko": "mafuriko",
+  "kwakweri": "kwakweli",
+  "mkurima": "mkulima",
+  "inastahimiri": "inastahimili",
+  "kueza": "kuweza",
+  "nilio": "niliyo",
+  "auja": "hauja",
+  "ware": "wale",
+  "kasolo": "kasoro",
+  "nashukulu": "nashukuru",
+  "ukiachiria": "ukiachilia",
+  "itaji": "hitaji",
+  "aija": "haija",
+  "yanalidhisha": "yanaridhisha",
+  "ujapendezwa": "hujapendezwa",
+  "vinzuri": "vizuri",
+  "kubadirika": "kubadilika",
+  "yanahalibika": "yanaharibika",
+  "aiku": "haiku",
+  "alina": "halina",
+  "hera": "hela",
+  "aijastawi": "haijastawi",
+  "madhala": "madhara",
+  "akipo": "hakipo",
+  "utalatibu": "utaratibu",
+  "uwezi": "huwezi",
+  "waliyoshambulia": "walioshambulia",
+  "ndio": "ndo",
+  "vizuli": "vizuri",
+  "alafu": "halafu",
+  "elezea": "eleza",
+  "kuusu": "kuhusu",
+  "uwezavyo": "huwezavyo",
+  "aya": "haya",
+  "marage": "maharage",
+  "hio": "hiyo",
+  "yaani": "yani",
+  "mauwa": "maua",
+  "ata": "hata",
+  "apa": "hapa",
+  "mi": "mimi",
+  "kwasabu": "kwasababu",
+  "malage": "maharage",
+  "nzuli": "nzuri",
+  "sawasawa": "sawa",
+  "apo": "hapo",
+  "maarage": "maharage",
+  "afu": "halafu",
+  "kadiri": "kadri",
+  "ii": "hii",
+  "amna": "hamna",
+  "iyo": "hiyo",
+  "kwasaabu": "kwasababu",
+  "kwaiyo": "kwahiyo",
+  "uko": "huko",
+  "mda": "muda",
+  "akuna": "hakuna",
+  "kitaru": "kitalu",
+  "mazuli": "mazuri",
+  "kwaio": "kwahiyo",
+  "kadili": "kadri",
+  "saivi": "sasahivi",
+  "mzuli": "mzuri",
+  "unaeza": "unaweza",
+  "mana": "maana",
+  "flani": "fulani",
+  "nachokipenda": "ninachokipenda",
+  "hivo": "hivyo",
+  "ukipendi": "hukipendi",
+  "maalage": "maharage",
+  "rabda": "labda",
+  "ujakipenda": "hujakipenda",
+  "zaa": "za",
+  "halaka": "haraka",
+  "asa": "hasa",
+  "uku": "huku",
+  "icho": "hicho",
+  "saana": "sana",
+  "kwahio": "kwahiyo",
+  "inaonesha": "inaonyesha",
+  "waa": "wa",
+  "kuelezea": "kueleza",
+  "sahivi": "sasahivi",
+  "kadli": "kadri",
+  "unavosema": "unavyosema",
+  "upendi": "hupendi",
+  "ivyo": "hivyo",
+  "ivo": "hivyo",
+  "hiko": "iko",
+  "mahalage": "maharage",
+  "apana": "hapana",
+  "yanaonesha": "yanaonyesha",
+  "langi": "rangi",
+  "sasaivi": "sasahivi",
+  "io": "hiyo",
+  "ubola": "ubora",
+  "kusu": "kuhusu",
+  "ivi": "hivi",
+  "ulio": "uliyo",
+  "inawai": "inawahi",
+  "unafikili": "unafikiri",
+  "mala": "mara",
+  "nachopenda": "ninachopenda",
+  "araka": "haraka",
+  "ali": "hali",
+  "uzuli": "uzuri",
+  "imesha": "imeisha",
+  "kizuli": "kizuri",
+  "zuli": "zuri",
+  "ela": "hela",
+  "izi": "hizi",
+  "iliopo": "iliyopo",
+  "adi": "hadi",
+  "uniaambie": "uniambie",
+  "zilizo": "zilizopo",
+  "nafikili": "nafikiri",
+  "aishambuliwi": "haishambuliwi",
+  "naelezea": "naeleza",
+  "walio": "waliyo",
+  "hipo": "ipo",
+  "mizuli": "mizuri",
+  "awa": "hawa",
+  "mvuwa": "mvua",
+  "naeza": "naweza",
+  "hiiyo": "hiyo",
+  "pazuli": "pazuri",
+  "tayali": "tayari",
+  "uenda": "huenda",
+  "maragi": "maharage",
+  "kwaivo": "kwahivyo",
+  "kwaivyo": "kwahivyo",
+  "kuathilika": "kuathirika",
+  "athali": "athari",
+  "ijaota": "hijaota",
+  "unaonesha": "unaonyesha",
+  "kwaajiri": "kwaajili",
+  "hiyoeeh": "hiyo"
+ },
+ "compound_indices": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  8,
+  11,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23,
+  24,
+  25,
+  26,
+  27,
+  28,
+  30,
+  34,
+  35,
+  36,
+  37,
+  38,
+  39,
+  40,
+  42,
+  43,
+  45,
+  46,
+  47,
+  48,
+  49,
+  51,
+  52,
+  53,
+  55,
+  57,
+  58,
+  59,
+  60,
+  63,
+  64,
+  65,
+  66,
+  67,
+  68,
+  70,
+  71,
+  73,
+  74,
+  75,
+  76,
+  77,
+  78,
+  79
+ ],
+ "compound_patterns": [
+  [
+   "\\bkwa\\s+sababu\\b",
+   "kwasababu"
+  ],
+  [
+   "\\bkwa\\s+sabu\\b",
+   "kwasababu"
+  ],
+  [
+   "\\bkwa\\s+saabu\\b",
+   "kwasababu"
+  ],
+  [
+   "\\bkwa\\s+kweli\\b",
+   "kwakweli"
+  ],
+  [
+   "\\bkwa\\s+hiyo\\b",
+   "kwahiyo"
+  ],
+  [
+   "\\bkwa\\s+hivyo\\b",
+   "kwahivyo"
+  ],
+  [
+   "\\bkwa\\s+iyo\\b",
+   "kwahiyo"
+  ],
+  [
+   "\\bkwa\\s+hio\\b",
+   "kwahiyo"
+  ],
+  [
+   "\\bkwa\\s+ajili\\b",
+   "kwaajili"
+  ],
+  [
+   "\\bkwa\\s+vile\\b",
+   "kwavile"
+  ],
+  [
+   "\\bkwa\\s+nini\\b",
+   "kwanini"
+  ],
+  [
+   "\\bkwa\\s+ujumla\\b",
+   "kwaujumla"
+  ],
+  [
+   "\\bvile\\s+vile\\b",
+   "vilevile"
+  ],
+  [
+   "\\bmbali\\s+mbali\\b",
+   "mbalimbali"
+  ],
+  [
+   "\\bmmoja\\s+mmoja\\b",
+   "mmojammoja"
+  ],
+  [
+   "\\bmoja\\s+moja\\b",
+   "mojamoja"
+  ],
+  [
+   "\\bkamba\\s+kamba\\b",
+   "kambakamba"
+  ],
+  [
+   "\\bpale\\s+pale\\b",
+   "palepale"
+  ],
+  [
+   "\\bhapo\\s+hapo\\b",
+   "hapohapo"
+  ],
+  [
+   "\\bhapa\\s+hapa\\b",
+   "hapahapa"
+  ],
+  [
+   "\\bmara\\s+kwa\\s+mara\\b",
+   "marakwamara"
+  ],
+  [
+   "\\bkidogo\\s+kidogo\\b",
+   "kidogokidogo"
+  ],
+  [
+   "\\bpole\\s+pole\\b",
+   "polepole"
+  ],
+  [
+   "\\bsawa\\s+sawa\\b",
+   "sawa"
+  ],
+  [
+   "\\bsasa\\s+hivi\\b",
+   "sasahivi"
+  ],
+  [
+   "\\bjuu\\s+ya\\b",
+   "juuya"
+  ],
+  [
+   "\\bunacho\\s+kipenda\\b",
+   "unachokipenda"
+  ],
+  [
+   "\\bninacho\\s+kipenda\\b",
+   "ninachokipenda"
+  ],
+  [
+   "\\bnilicho\\s+kipenda\\b",
+   "nilichokipenda"
+  ],
+  [
+   "\\bunacho\\s+kiona\\b",
+   "unachokiona"
+  ],
+  [
+   "\\bninacho\\s+kiona\\b",
+   "ninachokiona"
+  ],
+  [
+   "\\bnilicho\\s+kiona\\b",
+   "nilichokiona"
+  ],
+  [
+   "\\bunacho\\s+penda\\b",
+   "unachopenda"
+  ],
+  [
+   "\\bnisicho\\s+kipenda\\b",
+   "nisichokipenda"
+  ],
+  [
+   "\\busicho\\s+kipenda\\b",
+   "usichokipenda"
+  ],
+  [
+   "\\buschokipenda\\b",
+   "usichokipenda"
+  ],
+  [
+   "\\bnisicho\\s+penda\\b",
+   "nisichopenda"
+  ],
+  [
+   "\\busicho\\s+penda\\b",
+   "usichopenda"
+  ],
+  [
+   "\\bunacho\\s+kichukia\\b",
+   "unachokichukia"
+  ],
+  [
+   "\\bnilicho\\s+kichukia\\b",
+   "nilichokichukia"
+  ],
+  [
+   "\\bkisicho\\s+kupendeza\\b",
+   "kisichokupendeza"
+  ],
+  [
+   "\\buna\\s+kipenda\\b",
+   "unakipenda"
+  ],
+  [
+   "\\buna\\s+penda\\b",
+   "unapenda"
+  ],
+  [
+   "\\bhuja\\s+kipenda\\b",
+   "hujakipenda"
+  ],
+  [
+   "\\bume\\s+kipenda\\b",
+   "umekipenda"
+  ],
+  [
+   "\\bnime\\s+kipenda\\b",
+   "nimekipenda"
+  ],
+  [
+   "\\buna\\s+maanisha\\b",
+   "unamaanisha"
+  ],
+  [
+   "\\bnina\\s+maanisha\\b",
+   "ninamaanisha"
+  ],
+  [
+   "\\bina\\s+maana\\b",
+   "inamaana"
+  ],
+  [
+   "\\bina\\s+zaa\\b",
+   "inazaa"
+  ],
+  [
+   "\\bina\\s+kuwa\\b",
+   "inakuwa"
+  ],
+  [
+   "\\byana\\s+kuwa\\b",
+   "yanakuwa"
+  ],
+  [
+   "\\bina\\s+vutia\\b",
+   "inavutia"
+  ],
+  [
+   "\\byana\\s+vutia\\b",
+   "yanavutia"
+  ],
+  [
+   "\\bina\\s+vumilia\\b",
+   "inavumilia"
+  ],
+  [
+   "\\byana\\s+vumilia\\b",
+   "yanavumilia"
+  ],
+  [
+   "\\bkusua\\s+sua\\b",
+   "kusuasua"
+  ],
+  [
+   "\\bina\\s+leta\\b",
+   "inaleta"
+  ],
+  [
+   "\\bina\\s+wahi\\b",
+   "inawahi"
+  ],
+  [
+   "\\byana\\s+ota\\b",
+   "yanaota"
+  ],
+  [
+   "\\bina\\s+ota\\b",
+   "inaota"
+  ],
+  [
+   "\\binavyo\\s+onyesha\\b",
+   "inavyoonyesha"
+  ],
+  [
+   "\\bunavyo\\s+yaona\\b",
+   "unavyoyaona"
+  ]
+ ],
+ "meta": {
+  "frozen_at_utc": "2026-11-22T10:44:52+00:00",
+  "sheet": "results/variant_audit/variant_review_sheet.csv",
+  "sheet_sha256": "6e1d6c945385fc6983558f03a113f37aac9adff3827b06296f8e073611414e22",
+  "review_counts": {
+   "yes": 0,
+   "no": 0,
+   "blank": 238
+  },
+  "blank_policy": "keep",
+  "n_variants": 171,
+  "n_compounds": 63
+ }
+}

@@ -14,16 +14,27 @@ Steps, in the repository's order:
 from __future__ import annotations
 
 import re
+import string
 import unicodedata
 
 import ndizi_asr.ethio_normalize as en
+
+_OLD_PUNCT_TABLE = str.maketrans("", "", string.punctuation + "።፣፤፥፦፧፨።،؛؟«»\"'„“”‘’…–—")
+
+
+def legacy_normalize(text) -> str:
+    """The repository's legacy normalization (data_qc._norm_legacy_glued): lowercase, delete punctuation WITHOUT spaces."""
+    return re.sub(r"\s+", " ", (text or "").lower().translate(_OLD_PUNCT_TABLE)).strip()
+
 
 STRAY = {"m", "e", "u", "o", "hm", "mm", "eh", "ah", "uh", "oh"}
 REPO_MAP = {k: v for k, v in en._SWAHILI_SPELLING_MAP.items()}
 REPO_COMPOUNDS = list(en._SWAHILI_COMPOUND_PATTERNS)
 
 
-def normalize(text, *, backch=True, elong=True, compounds=None, variants=None) -> str:
+def normalize(text, *, backch=True, elong=True, compounds=None, variants=None, legacy=False) -> str:
+    if legacy:
+        return legacy_normalize(text)
     compounds = REPO_COMPOUNDS if compounds is None else compounds
     vmap = REPO_MAP if variants is None else variants
     t = unicodedata.normalize("NFKC", str(text or ""))
@@ -54,12 +65,23 @@ def normalize(text, *, backch=True, elong=True, compounds=None, variants=None) -
 
 
 STEPS = {
+    "S-1 Legacy (glued punctuation)": dict(legacy=True),
     "S0 base (punctuation, encoding)": dict(backch=False, elong=False, compounds=[], variants={}),
     "S1 + backchannels": dict(backch=True, elong=False, compounds=[], variants={}),
     "S2 + elongation": dict(backch=True, elong=True, compounds=[], variants={}),
     "S3 + compounds": dict(backch=True, elong=True, compounds=None, variants={}),
     "S4 + variant map = Fair (repository)": dict(backch=True, elong=True, compounds=None, variants=None),
 }
+
+
+def load_lists(path) -> dict:
+    """Config (for normalize) for the frozen training-only lists written by freeze_fair_train.py."""
+    import json
+    d = json.loads(open(path, encoding="utf-8").read())
+    for i, (p, r) in zip(d["compound_indices"], d["compound_patterns"]):
+        if REPO_COMPOUNDS[i][0].pattern != p or REPO_COMPOUNDS[i][1] != r:
+            raise SystemExit(f"compound rule {i} differs from the repository's list; the repository changed since freezing")
+    return dict(backch=True, elong=True, compounds=[REPO_COMPOUNDS[i] for i in d["compound_indices"]], variants=d["variants"])
 
 
 def check_identical(texts) -> int:
