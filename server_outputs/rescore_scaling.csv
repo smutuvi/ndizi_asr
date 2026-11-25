@@ -1,0 +1,41 @@
+system,normalization,clips_all,wer_all,clips_without_excluded,wer_without_excluded,ref_words_all,clips_clean,wer_clean
+n250,S-1 Legacy (glued punctuation),1036,38.31,1034,38.30,41199,1029,37.67
+n250,"S0 base (punctuation, encoding)",1036,29.44,1034,29.44,44135,1029,28.81
+n250,S1 + backchannels,1036,27.46,1034,27.45,42907,1029,26.83
+n250,S2 + elongation,1036,25.59,1034,25.59,42907,1029,24.96
+n250,S3 + compounds,1036,23.33,1034,23.32,42234,1029,22.68
+n250,S4 + variant map = Fair (repository),1036,19.58,1034,19.58,42229,1029,18.91
+n250,Fair-train: + frozen compounds,1036,23.37,1034,23.36,42243,1029,22.72
+n250,Fair-train FROZEN (reviewed lists),1036,19.82,1034,19.81,42234,1029,19.15
+n500,S-1 Legacy (glued punctuation),1036,36.88,1034,36.88,41199,1029,36.23
+n500,"S0 base (punctuation, encoding)",1036,28.33,1034,28.33,44135,1029,27.69
+n500,S1 + backchannels,1036,26.42,1034,26.42,42907,1029,25.79
+n500,S2 + elongation,1036,24.49,1034,24.49,42907,1029,23.85
+n500,S3 + compounds,1036,22.08,1034,22.08,42234,1029,21.42
+n500,S4 + variant map = Fair (repository),1036,18.24,1034,18.23,42229,1029,17.56
+n500,Fair-train: + frozen compounds,1036,22.12,1034,22.12,42243,1029,21.46
+n500,Fair-train FROZEN (reviewed lists),1036,18.48,1034,18.48,42234,1029,17.80
+n1000,S-1 Legacy (glued punctuation),1036,37.22,1034,37.21,41199,1029,36.55
+n1000,"S0 base (punctuation, encoding)",1036,28.35,1034,28.34,44135,1029,27.69
+n1000,S1 + backchannels,1036,26.28,1034,26.27,42907,1029,25.63
+n1000,S2 + elongation,1036,24.32,1034,24.31,42907,1029,23.66
+n1000,S3 + compounds,1036,21.87,1034,21.86,42234,1029,21.19
+n1000,S4 + variant map = Fair (repository),1036,17.93,1034,17.92,42229,1029,17.24
+n1000,Fair-train: + frozen compounds,1036,21.91,1034,21.90,42243,1029,21.24
+n1000,Fair-train FROZEN (reviewed lists),1036,18.17,1034,18.16,42234,1029,17.48
+n2000,S-1 Legacy (glued punctuation),1036,35.82,1034,35.82,41199,1029,35.16
+n2000,"S0 base (punctuation, encoding)",1036,26.72,1034,26.72,44135,1029,26.07
+n2000,S1 + backchannels,1036,24.65,1034,24.64,42907,1029,24.01
+n2000,S2 + elongation,1036,22.64,1034,22.63,42907,1029,22.00
+n2000,S3 + compounds,1036,20.11,1034,20.11,42234,1029,19.45
+n2000,S4 + variant map = Fair (repository),1036,16.15,1034,16.14,42229,1029,15.46
+n2000,Fair-train: + frozen compounds,1036,20.15,1034,20.15,42243,1029,19.49
+n2000,Fair-train FROZEN (reviewed lists),1036,16.41,1034,16.40,42234,1029,15.73
+n4000,S-1 Legacy (glued punctuation),1036,35.63,1034,35.62,41199,1029,34.97
+n4000,"S0 base (punctuation, encoding)",1036,26.38,1034,26.37,44135,1029,25.73
+n4000,S1 + backchannels,1036,24.34,1034,24.33,42907,1029,23.70
+n4000,S2 + elongation,1036,22.25,1034,22.24,42907,1029,21.60
+n4000,S3 + compounds,1036,19.75,1034,19.74,42234,1029,19.07
+n4000,S4 + variant map = Fair (repository),1036,15.70,1034,15.69,42229,1029,15.00
+n4000,Fair-train: + frozen compounds,1036,19.80,1034,19.80,42243,1029,19.13
+n4000,Fair-train FROZEN (reviewed lists),1036,15.96,1034,15.95,42234,1029,15.26
