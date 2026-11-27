@@ -1,0 +1,91 @@
+# Stage-1 SunflowerASR-51 LoRA on smutuvi/ndizi-1-sw — deploy baseline.
+# Preserves 100% of SunflowerASR-51's 51-language base weights while maximizing
+# in-domain Swahili farmer-survey accuracy:
+#   1. Dataset QC: glued-punctuation repair + speech-rate / tiny-transcript filtering
+#   2. Canonicalized Swahili training targets (compounds, Bantu R/L & H-drop, mojibake)
+#   3. Long audio: MMS_FA / Silero-VAD chunking of 1,550 clips >30s into <=28s segments
+#   4. 100% frozen base model + rsLoRA across Encoder (lr=1.5e-5) & Decoder (lr=4.0e-5) + SpecAugment
+#
+# Train:
+#   pip install -e ".[train]"
+#   ndizi-asr-train --config configs/train_sunbird51_ndizi_lora.yaml --dry-run
+#   ndizi-asr-train --config configs/train_sunbird51_ndizi_lora.yaml
+#
+# Eval (Swahili — merged deploy weights OK):
+#   ndizi-asr --model hf:outputs/sunflower51_ndizi1sw_lora_qc_v2/merged \
+#     --dataset smutuvi/ndizi-1-sw --split test --text-column transcript \
+#     --device cuda --experiment-name sunflower51_ndizi1sw_lora_qc_v2_test
+#
+# CropConcept Oromo degrade check (MUST use unmerged PEFT adapter so orm disables LoRA):
+#   ndizi-asr --model hf:outputs/sunflower51_ndizi1sw_lora_qc_v2 \
+#     --csv "$CSV" --languages om --normalize oromo_fair --device cuda \
+#     --experiment-name cropconcept_degrade_lora_qc_v2_peft
+#   # Or: NDIZI_PEFT_ADAPTER=outputs/sunflower51_ndizi1sw_lora_qc_v2 \
+#   #      ndizi-asr --model hf:smutuvi/sunflower51-ndizi1sw-lora-qc-v2 ...
+
+dataset_id: smutuvi/ndizi-1-sw
+experiment_name: sunflower51_ndizi1sw_lora_qc_v2_30s_control
+backend: whisper
+model_id: Sunbird/SunflowerASR-51-african-languages
+language: swahili
+audio_column: audio
+text_column: transcript
+split: train
+eval_split: validation
+output_dir: outputs
+num_train_epochs: 5
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 4
+learning_rate: 4.0e-5
+warmup_ratio: 0.08
+fp16: true
+logging_steps: 25
+save_steps: 500
+lora: true
+
+extra:
+  dataset_ids:
+    - smutuvi/ndizi-1-sw
+  # QC: repair glued punct; drop speech-rate / empty / tiny labels (~21 train rows).
+  apply_data_qc: true
+  canonicalize_train_text: true
+  filter_eval_outliers: false
+  min_chars_per_sec: 2.5
+  max_chars_per_sec: 26.0
+  # Long audio: keep >30s clips and expand into <=28s word-aligned chunks.
+  chunk_long_audio: false
+  chunk_long_audio_eval: true
+  chunk_max_seconds: 28.0
+  max_input_seconds: 30
+  label_max_length: 448
+  # Preserve 51-language base weights: keep 100% of base encoder+decoder frozen
+  # (unfreeze_top_encoder_layers: 0) and adapt both encoder & decoder purely via
+  # low-rank rsLoRA with a conservative 1.5e-5 encoder LoRA LR + SpecAugment.
+  freeze_encoder: true
+  unfreeze_top_encoder_layers: 0
+  encoder_learning_rate: 1.5e-5
+  use_rslora: true
+  apply_spec_augment: true
+  mask_time_prob: 0.05
+  mask_feature_prob: 0.04
+  # Must stay 0: label smoothing pops labels before Whisper forward (breaks decoder_input_ids).
+  label_smoothing_factor: 0.0
+  lr_scheduler_type: cosine
+  save_merged: true
+  lora_r: 32
+  lora_alpha: 64
+  lora_dropout: 0.05
+  lora_target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - out_proj
+    - fc1
+    - fc2
+  gradient_checkpointing: true
+  save_total_limit: 2
+  per_device_eval_batch_size: 4
+  # Keep 0: avoids Linux PyArrow/CUDA fork deadlock (futex_wait_queue_me) after MMS_FA chunking.
+  dataloader_num_workers: 0
+  on_the_fly_features: true
+  cache_chunked_dataset: true
